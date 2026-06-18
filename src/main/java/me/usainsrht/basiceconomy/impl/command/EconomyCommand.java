@@ -10,8 +10,6 @@ import com.mojang.brigadier.suggestion.Suggestions;
 import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
-import io.papermc.paper.command.brigadier.argument.ArgumentTypes;
-import io.papermc.paper.command.brigadier.argument.resolvers.selector.PlayerSelectorArgumentResolver;
 import me.usainsrht.basiceconomy.api.Account;
 import me.usainsrht.basiceconomy.api.Currency;
 import me.usainsrht.basiceconomy.impl.BasicEconomyPlugin;
@@ -19,11 +17,14 @@ import me.usainsrht.basiceconomy.impl.account.AccountManagerImpl;
 import me.usainsrht.basiceconomy.impl.config.ConfigManager;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
+import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
@@ -50,40 +51,63 @@ public class EconomyCommand {
 
         // /money [currency]
         if (!singleCurrency) {
-            cmd.then(Commands.argument("currency", StringArgumentType.word())
-                    .suggests(this::suggestCurrencies)
-                    .executes(this::executeSelfCurrency));
+            for (String cur : config.getCurrencies().keySet()) {
+                cmd.then(Commands.literal(cur)
+                        .executes(ctx -> executeSelf(ctx, accountManager.getCurrency(cur))));
+            }
         }
 
         // /money reload
-        cmd.then(Commands.literal("reload")
-                .requires(src -> src.getSender().hasPermission(config.getCommandPermission("money") + ".reload"))
-                .executes(this::executeReload));
+        String reloadName = config.getSubcommandName("money", "reload");
+        String reloadPermission = config.getSubcommandPermission("money", "reload", config.getCommandPermission("money") + ".reload");
+        List<String> reloadAliases = config.getSubcommandAliases("money", "reload");
+
+        List<String> reloadNames = new ArrayList<>();
+        reloadNames.add(reloadName);
+        reloadNames.addAll(reloadAliases);
+
+        for (String rName : reloadNames) {
+            cmd.then(Commands.literal(rName)
+                    .requires(src -> src.getSender().hasPermission(reloadPermission))
+                    .executes(this::executeReload));
+        }
 
         // Subcommands (set, add, remove)
         String[] actions = {"set", "add", "remove"};
         for (String action : actions) {
-            LiteralArgumentBuilder<CommandSourceStack> actionNode = Commands.literal(action)
-                    .requires(src -> src.getSender().hasPermission(config.getCommandPermission("money") + ".admin"));
+            String actionName = config.getSubcommandName("money", action);
+            String permission = config.getSubcommandPermission("money", action, config.getCommandPermission("money") + ".admin");
+            List<String> aliases = config.getSubcommandAliases("money", action);
 
-            RequiredArgumentBuilder<CommandSourceStack, PlayerSelectorArgumentResolver> targetNode = Commands.argument("target", ArgumentTypes.player());
-            RequiredArgumentBuilder<CommandSourceStack, Double> amountNode = Commands.argument("amount", DoubleArgumentType.doubleArg(0));
+            List<String> actionNames = new ArrayList<>();
+            actionNames.add(actionName);
+            actionNames.addAll(aliases);
 
-            amountNode.executes(ctx -> executeAdmin(ctx, action, null));
+            for (String aName : actionNames) {
+                LiteralArgumentBuilder<CommandSourceStack> actionNode = Commands.literal(aName)
+                        .requires(src -> src.getSender().hasPermission(permission));
 
-            if (!singleCurrency) {
-                amountNode.then(Commands.argument("currency", StringArgumentType.word())
-                        .suggests(this::suggestCurrencies)
-                        .executes(ctx -> executeAdmin(ctx, action, StringArgumentType.getString(ctx, "currency"))));
+                RequiredArgumentBuilder<CommandSourceStack, String> targetNode = Commands.argument("target", StringArgumentType.word())
+                        .suggests(this::suggestPlayers);
+                RequiredArgumentBuilder<CommandSourceStack, Double> amountNode = Commands.argument("amount", DoubleArgumentType.doubleArg(0));
+
+                amountNode.executes(ctx -> executeAdmin(ctx, action, null));
+
+                if (!singleCurrency) {
+                    amountNode.then(Commands.argument("currency", StringArgumentType.word())
+                            .suggests(this::suggestCurrencies)
+                            .executes(ctx -> executeAdmin(ctx, action, StringArgumentType.getString(ctx, "currency"))));
+                }
+
+                targetNode.then(amountNode);
+                actionNode.then(targetNode);
+                cmd.then(actionNode);
             }
-
-            targetNode.then(amountNode);
-            actionNode.then(targetNode);
-            cmd.then(actionNode);
         }
 
         // /money <player>
-        RequiredArgumentBuilder<CommandSourceStack, PlayerSelectorArgumentResolver> otherTarget = Commands.argument("player", ArgumentTypes.player());
+        RequiredArgumentBuilder<CommandSourceStack, String> otherTarget = Commands.argument("player", StringArgumentType.word())
+                .suggests(this::suggestPlayers);
         otherTarget.executes(this::executeOther);
 
         if (!singleCurrency) {
@@ -106,18 +130,28 @@ public class EconomyCommand {
         return builder.buildFuture();
     }
 
-    private int executeSelf(CommandContext<CommandSourceStack> ctx) {
-        return executeSelf(ctx, accountManager.getDefaultCurrency());
+    private CompletableFuture<Suggestions> suggestPlayers(CommandContext<CommandSourceStack> context, SuggestionsBuilder builder) {
+        String input = builder.getRemaining().toLowerCase();
+        Set<String> names = new HashSet<>();
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            names.add(player.getName());
+        }
+        for (OfflinePlayer player : Bukkit.getOfflinePlayers()) {
+            String name = player.getName();
+            if (name != null) {
+                names.add(name);
+            }
+        }
+        for (String name : names) {
+            if (name.toLowerCase().startsWith(input)) {
+                builder.suggest(name);
+            }
+        }
+        return builder.buildFuture();
     }
 
-    private int executeSelfCurrency(CommandContext<CommandSourceStack> ctx) {
-        String currName = StringArgumentType.getString(ctx, "currency");
-        Currency currency = accountManager.getCurrency(currName);
-        if (currency == null) {
-            ctx.getSource().getSender().sendMessage(config.getMessage("currency_not_found"));
-            return 0;
-        }
-        return executeSelf(ctx, currency);
+    private int executeSelf(CommandContext<CommandSourceStack> ctx) {
+        return executeSelf(ctx, accountManager.getDefaultCurrency());
     }
 
     private int executeSelf(CommandContext<CommandSourceStack> ctx, Currency currency) {
@@ -148,11 +182,20 @@ public class EconomyCommand {
 
     private int executeOther(CommandContext<CommandSourceStack> ctx, Currency currency) {
         try {
-            Player target = ctx.getArgument("player", PlayerSelectorArgumentResolver.class).resolve(ctx.getSource()).get(0);
+            String targetName = StringArgumentType.getString(ctx, "player");
+            OfflinePlayer target = Bukkit.getPlayer(targetName);
+            if (target == null) {
+                target = Bukkit.getOfflinePlayer(targetName);
+                if (!target.hasPlayedBefore()) {
+                    ctx.getSource().getSender().sendMessage(config.getMessage("player_not_found"));
+                    return 0;
+                }
+            }
+            final String finalTargetName = target.getName() != null ? target.getName() : targetName;
             accountManager.getAccount(target.getUniqueId()).thenAccept(account -> {
                 BigDecimal bal = account.getBalance(currency);
                 ctx.getSource().getSender().sendMessage(config.getMessage("balance_other", 
-                        "player", target.getName(),
+                        "player", finalTargetName,
                         "amount", currency.format(bal)));
             });
             return Command.SINGLE_SUCCESS;
@@ -170,7 +213,16 @@ public class EconomyCommand {
         }
         
         try {
-            Player target = ctx.getArgument("target", PlayerSelectorArgumentResolver.class).resolve(ctx.getSource()).get(0);
+            String targetName = StringArgumentType.getString(ctx, "target");
+            OfflinePlayer target = Bukkit.getPlayer(targetName);
+            if (target == null) {
+                target = Bukkit.getOfflinePlayer(targetName);
+                if (!target.hasPlayedBefore()) {
+                    ctx.getSource().getSender().sendMessage(config.getMessage("player_not_found"));
+                    return 0;
+                }
+            }
+            final String finalTargetName = target.getName() != null ? target.getName() : targetName;
             double amount = DoubleArgumentType.getDouble(ctx, "amount");
             BigDecimal bdAmount = BigDecimal.valueOf(amount);
             
@@ -191,7 +243,7 @@ public class EconomyCommand {
                 future.thenAccept(success -> {
                     if (success) {
                         ctx.getSource().getSender().sendMessage(config.getMessage(msgKey, 
-                                "player", target.getName(),
+                                "player", finalTargetName,
                                 "amount", currency.format(bdAmount)));
                     } else {
                         ctx.getSource().getSender().sendMessage(config.getMessage("invalid_amount"));

@@ -29,9 +29,9 @@ public class BasicEconomyPlugin extends JavaPlugin implements Listener {
     @Override
     public void onEnable() {
         saveDefaultConfig();
-        
+
         configManager = new ConfigManager(getConfig());
-        
+
         try {
             if (configManager.getStorageType().equals("MONGODB")) {
                 storage = new MongoStorage(configManager);
@@ -70,7 +70,7 @@ public class BasicEconomyPlugin extends JavaPlugin implements Listener {
         registry.register();
 
         // bStats
-        int pluginId = 22359; // Placeholder ID
+        int pluginId = 32082; // Placeholder ID
         new Metrics(this, pluginId);
 
         getLogger().info("BasicEconomy has been enabled.");

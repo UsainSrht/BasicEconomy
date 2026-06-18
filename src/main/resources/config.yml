@@ -29,6 +29,25 @@ commands:
       - balance
       - bal
     permission: "basiceconomy.command.money"
+    subcommands:
+      add:
+        name: "add"
+        aliases:
+          - give
+          - grant
+        permission: "basiceconomy.command.money.admin"
+      set:
+        name: "set"
+        aliases: []
+        permission: "basiceconomy.command.money.admin"
+      remove:
+        name: "remove"
+        aliases: []
+        permission: "basiceconomy.command.money.admin"
+      reload:
+        name: "reload"
+        aliases: []
+        permission: "basiceconomy.command.money.reload"
   pay:
     aliases:
       - pay
@@ -41,6 +60,7 @@ commands:
     permission: "basiceconomy.command.baltop"
 
 # Currencies
+default-currency: "coins"
 currencies:
   coins:
     name: "coins"

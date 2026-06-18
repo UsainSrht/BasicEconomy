@@ -26,7 +26,9 @@ public class ConfigManager {
     public void load() {
         currencies.clear();
         messages.clear();
+        defaultCurrencyName = null;
 
+        String firstLoadedCurrency = null;
         ConfigurationSection currencySection = config.getConfigurationSection("currencies");
         if (currencySection != null) {
             for (String key : currencySection.getKeys(false)) {
@@ -52,12 +54,19 @@ public class ConfigManager {
                         compactFormatting, payEnabled, baltopEnabled, min, max, start
                 );
                 
-                if (defaultCurrencyName == null) {
-                    defaultCurrencyName = name;
+                if (firstLoadedCurrency == null) {
+                    firstLoadedCurrency = name;
                 }
                 
                 currencies.put(name.toLowerCase(), currency);
             }
+        }
+
+        String defaultCurrencyConfig = config.getString("default-currency");
+        if (defaultCurrencyConfig != null && currencies.containsKey(defaultCurrencyConfig.toLowerCase())) {
+            defaultCurrencyName = currencies.get(defaultCurrencyConfig.toLowerCase()).name();
+        } else {
+            defaultCurrencyName = firstLoadedCurrency;
         }
 
         ConfigurationSection messagesSection = config.getConfigurationSection("messages");
@@ -107,6 +116,18 @@ public class ConfigManager {
 
     public String getCommandPermission(String command) {
         return config.getString("commands." + command + ".permission", "basiceconomy.command." + command);
+    }
+    
+    public String getSubcommandName(String parent, String subKey) {
+        return config.getString("commands." + parent + ".subcommands." + subKey + ".name", subKey);
+    }
+
+    public List<String> getSubcommandAliases(String parent, String subKey) {
+        return config.getStringList("commands." + parent + ".subcommands." + subKey + ".aliases");
+    }
+
+    public String getSubcommandPermission(String parent, String subKey, String defaultPerm) {
+        return config.getString("commands." + parent + ".subcommands." + subKey + ".permission", defaultPerm);
     }
     
     public String getStorageType() {
