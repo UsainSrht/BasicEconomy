@@ -1,0 +1,94 @@
+# BasicEconomy Configuration
+
+# Storage Settings
+# Supported types: H2, MYSQL, MARIADB, POSTGRESQL, MONGODB
+storage:
+  type: H2
+  address: "localhost"
+  port: 3306
+  database: "basiceconomy"
+  username: "root"
+  password: ""
+  # H2 specific setting
+  h2-file: "database"
+  # MongoDB specific settings
+  mongodb-uri: "mongodb://localhost:27017"
+
+# Task settings
+tasks:
+  # How often (in seconds) should baltop be updated asynchronously?
+  baltop-update-interval: 300
+  # How often (in seconds) should offline caches be cleared?
+  cache-cleanup-interval: 600
+
+# Commands
+commands:
+  money:
+    aliases:
+      - money
+      - balance
+      - bal
+    permission: "basiceconomy.command.money"
+  pay:
+    aliases:
+      - pay
+      - transfer
+    permission: "basiceconomy.command.pay"
+  baltop:
+    aliases:
+      - baltop
+      - topmoney
+    permission: "basiceconomy.command.baltop"
+
+# Currencies
+currencies:
+  coins:
+    name: "coins"
+    displayname: "<gold>Coins</gold>"
+    displayname_plural: "<gold>Coins</gold>"
+    symbol: "<gold>⛃</gold>"
+    default_format: "#,##0.00"
+    compact_formatting: true
+    pay_enabled: true
+    baltop_enabled: true
+    min_value: 0.0
+    start_value: 100.0
+  gems:
+    name: "gems"
+    displayname: "<green>Gems</green>"
+    displayname_plural: "<green>Gems</green>"
+    symbol: "<green>♦</green>"
+    default_format: "#,##0"
+    compact_formatting: true
+    pay_enabled: false
+    baltop_enabled: true
+    min_value: 0.0
+    start_value: 0.0
+
+# Messages
+messages:
+  prefix: "<gray>[<gold>BasicEconomy</gold>] </gray>"
+  no_permission: "<red>You do not have permission to do this.</red>"
+  player_only: "<red>Only players can use this command.</red>"
+  player_not_found: "<red>Player not found or never joined.</red>"
+  invalid_amount: "<red>Invalid amount specified.</red>"
+  currency_not_found: "<red>Currency not found.</red>"
+  
+  balance_self: "<gray>Your balance: <yellow><amount></yellow></gray>"
+  balance_other: "<gray><player>'s balance: <yellow><amount></yellow></gray>"
+  
+  pay_success: "<green>You paid <player> <amount>.</green>"
+  pay_received: "<green>You received <amount> from <player>.</green>"
+  pay_disabled: "<red>Payments are disabled for this currency.</red>"
+  not_enough_money: "<red>You do not have enough money.</red>"
+  cannot_pay_self: "<red>You cannot pay yourself.</red>"
+  
+  set_success: "<green>Set <player>'s balance to <amount>.</green>"
+  add_success: "<green>Added <amount> to <player>'s balance.</green>"
+  remove_success: "<green>Removed <amount> from <player>'s balance.</green>"
+  
+  baltop_header: "<gold>--- Top Balances (<currency>) ---</gold>"
+  baltop_entry: "<gray><position>. <player>: <yellow><amount></yellow></gray>"
+  baltop_disabled: "<red>Baltop is disabled for this currency.</red>"
+  
+  reloaded: "<green>Plugin reloaded successfully.</green>"

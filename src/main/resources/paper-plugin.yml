@@ -1,0 +1,20 @@
+name: BasicEconomy
+version: '${version}'
+main: me.usainsrht.basiceconomy.impl.BasicEconomyPlugin
+api-version: '1.20'
+folia-supported: true
+authors: [Usain]
+description: A complete, production-ready Minecraft economy plugin.
+load: STARTUP
+dependencies:
+  server:
+    Vault:
+      load: BEFORE
+      required: false
+      join-classpath: true
+    PlaceholderAPI:
+      load: BEFORE
+      required: false
+      join-classpath: true
+
+loader: me.usainsrht.basiceconomy.impl.loader.BasicEconomyLoader
