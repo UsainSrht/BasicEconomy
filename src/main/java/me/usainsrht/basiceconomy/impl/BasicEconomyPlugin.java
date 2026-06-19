@@ -59,6 +59,14 @@ public class BasicEconomyPlugin extends JavaPlugin implements Listener {
             getLogger().info("Hooked into Vault!");
         }
 
+        // VaultUnlocked hook
+        try {
+            Class.forName("net.milkbowl.vault2.economy.Economy");
+            me.usainsrht.basiceconomy.impl.integration.Vault2Hook.register(this, accountManager);
+        } catch (Throwable ignored) {
+            // VaultUnlocked not present
+        }
+
         // PlaceholderAPI hook
         if (getServer().getPluginManager().getPlugin("PlaceholderAPI") != null) {
             new PlaceholderAPIExpansion(this, accountManager, configManager).register();

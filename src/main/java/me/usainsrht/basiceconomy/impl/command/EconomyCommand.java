@@ -72,6 +72,36 @@ public class EconomyCommand {
                     .executes(this::executeReload));
         }
 
+        // /money help
+        String helpName = config.getSubcommandName("money", "help");
+        String helpPermission = config.getSubcommandPermission("money", "help", config.getCommandPermission("money") + ".help");
+        List<String> helpAliases = config.getSubcommandAliases("money", "help");
+
+        List<String> helpNames = new ArrayList<>();
+        helpNames.add(helpName);
+        helpNames.addAll(helpAliases);
+
+        for (String hName : helpNames) {
+            cmd.then(Commands.literal(hName)
+                    .requires(src -> src.getSender().hasPermission(helpPermission))
+                    .executes(this::executeHelp));
+        }
+
+        // /money info
+        String infoName = config.getSubcommandName("money", "info");
+        String infoPermission = config.getSubcommandPermission("money", "info", config.getCommandPermission("money") + ".info");
+        List<String> infoAliases = config.getSubcommandAliases("money", "info");
+
+        List<String> infoNames = new ArrayList<>();
+        infoNames.add(infoName);
+        infoNames.addAll(infoAliases);
+
+        for (String iName : infoNames) {
+            cmd.then(Commands.literal(iName)
+                    .requires(src -> src.getSender().hasPermission(infoPermission))
+                    .executes(this::executeInfo));
+        }
+
         // Subcommands (set, add, remove)
         String[] actions = {"set", "add", "remove"};
         for (String action : actions) {
@@ -260,6 +290,40 @@ public class EconomyCommand {
     private int executeReload(CommandContext<CommandSourceStack> ctx) {
         plugin.reload();
         ctx.getSource().getSender().sendMessage(config.getMessage("reloaded"));
+        return Command.SINGLE_SUCCESS;
+    }
+
+    private int executeHelp(CommandContext<CommandSourceStack> ctx) {
+        ctx.getSource().getSender().sendMessage(config.getMessage("money_help"));
+        return Command.SINGLE_SUCCESS;
+    }
+
+    private int executeInfo(CommandContext<CommandSourceStack> ctx) {
+        org.bukkit.plugin.Plugin vault = Bukkit.getPluginManager().getPlugin("Vault");
+        String vaultHook = (vault != null && vault.isEnabled()) ? vault.getDescription().getVersion() : "Disabled";
+
+        org.bukkit.plugin.Plugin vaultUnlocked = Bukkit.getPluginManager().getPlugin("VaultUnlocked");
+        String vault2Hook = "Disabled";
+        if (vaultUnlocked != null && vaultUnlocked.isEnabled()) {
+            vault2Hook = vaultUnlocked.getDescription().getVersion();
+        } else {
+            try {
+                Class.forName("net.milkbowl.vault2.economy.Economy");
+                vault2Hook = "Enabled";
+            } catch (Throwable ignored) {}
+        }
+
+        org.bukkit.plugin.Plugin papi = Bukkit.getPluginManager().getPlugin("PlaceholderAPI");
+        String papiHook = (papi != null && papi.isEnabled()) ? papi.getDescription().getVersion() : "Disabled";
+
+        ctx.getSource().getSender().sendMessage(config.getMessage("money_info",
+                "server_version", Bukkit.getBukkitVersion(),
+                "platform", Bukkit.getName(),
+                "db_type", config.getStorageType(),
+                "vault_hook", vaultHook,
+                "vault2_hook", vault2Hook,
+                "papi_hook", papiHook
+        ));
         return Command.SINGLE_SUCCESS;
     }
 }

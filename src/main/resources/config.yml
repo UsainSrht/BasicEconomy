@@ -48,6 +48,17 @@ commands:
         name: "reload"
         aliases: []
         permission: "basiceconomy.command.money.reload"
+      help:
+        name: "help"
+        aliases:
+          - "?"
+        permission: "basiceconomy.command.money.help"
+      info:
+        name: "info"
+        aliases:
+          - status
+          - version
+        permission: "basiceconomy.command.money.info"
   pay:
     aliases:
       - pay
@@ -112,3 +123,25 @@ messages:
   baltop_disabled: "<red>Baltop is disabled for this currency.</red>"
   
   reloaded: "<green>Plugin reloaded successfully.</green>"
+  
+  money_help: |
+    <gold>--- BasicEconomy Help ---</gold>
+    <gray>/money - Check your balance</gray>
+    <gray>/money <player> - Check player's balance</gray>
+    <gray>/money help - Show this help menu</gray>
+    <gray>/money info - Show plugin information</gray>
+    <gray>/money reload - Reload configuration</gray>
+    <gray>/money add <player> <amount> [currency] - Add balance</gray>
+    <gray>/money set <player> <amount> [currency] - Set balance</gray>
+    <gray>/money remove <player> <amount> [currency] - Remove balance</gray>
+    <gray>/pay <player> <amount> [currency] - Pay player</gray>
+    <gray>/baltop [currency] - Show balance top list</gray>
+    
+  money_info: |
+    <gold>--- BasicEconomy Info ---</gold>
+    <gray>Server Version: <white><server_version></white></gray>
+    <gray>Platform: <white><platform></white></gray>
+    <gray>Database Type: <white><db_type></white></gray>
+    <gray>Legacy Vault Hook: <white><vault_hook></white></gray>
+    <gray>Modern Vault Hook: <white><vault2_hook></white></gray>
+    <gray>PlaceholderAPI Hook: <white><papi_hook></white></gray>

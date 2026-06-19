@@ -97,7 +97,8 @@ public class ConfigManager {
             return prefix; // Don't prefix the prefix
         }
         
-        Component result = prefix.append(message);
+        boolean showPrefix = !key.equals("money_help") && !key.equals("money_info");
+        Component result = showPrefix ? prefix.append(message) : message;
         
         for (int i = 0; i < placeholders.length; i += 2) {
             if (i + 1 < placeholders.length) {
