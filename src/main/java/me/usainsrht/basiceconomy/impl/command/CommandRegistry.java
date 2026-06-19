@@ -30,18 +30,24 @@ public class CommandRegistry {
             Commands commands = event.registrar();
 
             EconomyCommand moneyCmd = new EconomyCommand(plugin, accountManager, config);
+            String moneyName = config.getCommandName("money");
+            commands.register(moneyCmd.build(moneyName).build(), "BasicEconomy main command", List.of());
             List<String> moneyAliases = config.getCommandAliases("money");
             for (String alias : moneyAliases) {
                 commands.register(moneyCmd.build(alias).build(), "BasicEconomy main command", List.of());
             }
 
             PayCommand payCmd = new PayCommand(plugin, accountManager, config);
+            String payName = config.getCommandName("pay");
+            commands.register(payCmd.build(payName).build(), "BasicEconomy pay command", List.of());
             List<String> payAliases = config.getCommandAliases("pay");
             for (String alias : payAliases) {
                 commands.register(payCmd.build(alias).build(), "BasicEconomy pay command", List.of());
             }
 
             BaltopCommand baltopCmd = new BaltopCommand(plugin, accountManager, config);
+            String baltopName = config.getCommandName("baltop");
+            commands.register(baltopCmd.build(baltopName).build(), "BasicEconomy baltop command", List.of());
             List<String> baltopAliases = config.getCommandAliases("baltop");
             for (String alias : baltopAliases) {
                 commands.register(baltopCmd.build(alias).build(), "BasicEconomy baltop command", List.of());

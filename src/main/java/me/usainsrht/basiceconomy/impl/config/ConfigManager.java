@@ -115,6 +115,10 @@ public class ConfigManager {
         return result;
     }
 
+    public String getCommandName(String command) {
+        return config.getString("commands." + command + ".name", command);
+    }
+
     public List<String> getCommandAliases(String command) {
         return config.getStringList("commands." + command + ".aliases");
     }

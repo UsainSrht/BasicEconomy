@@ -24,8 +24,8 @@ tasks:
 # Commands
 commands:
   money:
+    name: "money"
     aliases:
-      - money
       - balance
       - bal
     permission: "basiceconomy.command.money"
@@ -55,19 +55,15 @@ commands:
         permission: "basiceconomy.command.money.help"
       info:
         name: "info"
-        aliases:
-          - status
-          - version
+        aliases: []
         permission: "basiceconomy.command.money.info"
   pay:
-    aliases:
-      - pay
-      - transfer
+    name: "pay"
+    aliases: []
     permission: "basiceconomy.command.pay"
   baltop:
-    aliases:
-      - baltop
-      - topmoney
+    name: "baltop"
+    aliases: []
     permission: "basiceconomy.command.baltop"
 
 # Currencies
