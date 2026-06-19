@@ -162,17 +162,8 @@ public class EconomyCommand {
 
     private CompletableFuture<Suggestions> suggestPlayers(CommandContext<CommandSourceStack> context, SuggestionsBuilder builder) {
         String input = builder.getRemaining().toLowerCase();
-        Set<String> names = new HashSet<>();
         for (Player player : Bukkit.getOnlinePlayers()) {
-            names.add(player.getName());
-        }
-        for (OfflinePlayer player : Bukkit.getOfflinePlayers()) {
             String name = player.getName();
-            if (name != null) {
-                names.add(name);
-            }
-        }
-        for (String name : names) {
             if (name.toLowerCase().startsWith(input)) {
                 builder.suggest(name);
             }
@@ -191,7 +182,9 @@ public class EconomyCommand {
         }
         accountManager.getAccount(player.getUniqueId()).thenAccept(account -> {
             BigDecimal bal = account.getBalance(currency);
-            player.sendMessage(config.getMessage("balance_self", "amount", currency.format(bal)));
+            Bukkit.getGlobalRegionScheduler().run(plugin, task -> 
+                player.sendMessage(config.getMessage("balance_self", "amount", currency.format(bal)))
+            );
         });
         return Command.SINGLE_SUCCESS;
     }
@@ -211,28 +204,36 @@ public class EconomyCommand {
     }
 
     private int executeOther(CommandContext<CommandSourceStack> ctx, Currency currency) {
-        try {
-            String targetName = StringArgumentType.getString(ctx, "player");
-            OfflinePlayer target = Bukkit.getPlayer(targetName);
-            if (target == null) {
-                target = Bukkit.getOfflinePlayer(targetName);
-                if (!target.hasPlayedBefore()) {
-                    ctx.getSource().getSender().sendMessage(config.getMessage("player_not_found"));
-                    return 0;
+        CompletableFuture.runAsync(() -> {
+            try {
+                String targetName = StringArgumentType.getString(ctx, "player");
+                OfflinePlayer target = Bukkit.getPlayer(targetName);
+                if (target == null) {
+                    target = Bukkit.getOfflinePlayer(targetName);
+                    if (!target.hasPlayedBefore()) {
+                        Bukkit.getGlobalRegionScheduler().run(plugin, task -> 
+                            ctx.getSource().getSender().sendMessage(config.getMessage("player_not_found"))
+                        );
+                        return;
+                    }
                 }
+                final OfflinePlayer finalTarget = target;
+                final String finalTargetName = target.getName() != null ? target.getName() : targetName;
+                accountManager.getAccount(finalTarget.getUniqueId()).thenAccept(account -> {
+                    BigDecimal bal = account.getBalance(currency);
+                    Bukkit.getGlobalRegionScheduler().run(plugin, task -> 
+                        ctx.getSource().getSender().sendMessage(config.getMessage("balance_other", 
+                                "player", finalTargetName,
+                                "amount", currency.format(bal)))
+                    );
+                });
+            } catch (Exception e) {
+                Bukkit.getGlobalRegionScheduler().run(plugin, task -> 
+                    ctx.getSource().getSender().sendMessage(config.getMessage("player_not_found"))
+                );
             }
-            final String finalTargetName = target.getName() != null ? target.getName() : targetName;
-            accountManager.getAccount(target.getUniqueId()).thenAccept(account -> {
-                BigDecimal bal = account.getBalance(currency);
-                ctx.getSource().getSender().sendMessage(config.getMessage("balance_other", 
-                        "player", finalTargetName,
-                        "amount", currency.format(bal)));
-            });
-            return Command.SINGLE_SUCCESS;
-        } catch (Exception e) {
-            ctx.getSource().getSender().sendMessage(config.getMessage("player_not_found"));
-            return 0;
-        }
+        });
+        return Command.SINGLE_SUCCESS;
     }
 
     private int executeAdmin(CommandContext<CommandSourceStack> ctx, String action, String currName) {
@@ -242,49 +243,57 @@ public class EconomyCommand {
             return 0;
         }
         
-        try {
-            String targetName = StringArgumentType.getString(ctx, "target");
-            OfflinePlayer target = Bukkit.getPlayer(targetName);
-            if (target == null) {
-                target = Bukkit.getOfflinePlayer(targetName);
-                if (!target.hasPlayedBefore()) {
-                    ctx.getSource().getSender().sendMessage(config.getMessage("player_not_found"));
-                    return 0;
-                }
-            }
-            final String finalTargetName = target.getName() != null ? target.getName() : targetName;
-            double amount = DoubleArgumentType.getDouble(ctx, "amount");
-            BigDecimal bdAmount = BigDecimal.valueOf(amount);
-            
-            accountManager.getAccount(target.getUniqueId()).thenAccept(account -> {
-                CompletableFuture<Boolean> future;
-                String msgKey;
-                if (action.equals("set")) {
-                    future = account.setBalance(currency, bdAmount);
-                    msgKey = "set_success";
-                } else if (action.equals("add")) {
-                    future = account.addBalance(currency, bdAmount);
-                    msgKey = "add_success";
-                } else {
-                    future = account.removeBalance(currency, bdAmount);
-                    msgKey = "remove_success";
-                }
-                
-                future.thenAccept(success -> {
-                    if (success) {
-                        ctx.getSource().getSender().sendMessage(config.getMessage(msgKey, 
-                                "player", finalTargetName,
-                                "amount", currency.format(bdAmount)));
-                    } else {
-                        ctx.getSource().getSender().sendMessage(config.getMessage("invalid_amount"));
+        CompletableFuture.runAsync(() -> {
+            try {
+                String targetName = StringArgumentType.getString(ctx, "target");
+                OfflinePlayer target = Bukkit.getPlayer(targetName);
+                if (target == null) {
+                    target = Bukkit.getOfflinePlayer(targetName);
+                    if (!target.hasPlayedBefore()) {
+                        Bukkit.getGlobalRegionScheduler().run(plugin, task -> 
+                            ctx.getSource().getSender().sendMessage(config.getMessage("player_not_found"))
+                        );
+                        return;
                     }
+                }
+                final OfflinePlayer finalTarget = target;
+                final String finalTargetName = target.getName() != null ? target.getName() : targetName;
+                double amount = DoubleArgumentType.getDouble(ctx, "amount");
+                BigDecimal bdAmount = BigDecimal.valueOf(amount);
+                
+                accountManager.getAccount(finalTarget.getUniqueId()).thenAccept(account -> {
+                    CompletableFuture<Boolean> future;
+                    String msgKey;
+                    if (action.equals("set")) {
+                        future = account.setBalance(currency, bdAmount);
+                        msgKey = "set_success";
+                    } else if (action.equals("add")) {
+                        future = account.addBalance(currency, bdAmount);
+                        msgKey = "add_success";
+                    } else {
+                        future = account.removeBalance(currency, bdAmount);
+                        msgKey = "remove_success";
+                    }
+                    
+                    future.thenAccept(success -> {
+                        Bukkit.getGlobalRegionScheduler().run(plugin, task -> {
+                            if (success) {
+                                ctx.getSource().getSender().sendMessage(config.getMessage(msgKey, 
+                                        "player", finalTargetName,
+                                        "amount", currency.format(bdAmount)));
+                            } else {
+                                ctx.getSource().getSender().sendMessage(config.getMessage("invalid_amount"));
+                            }
+                        });
+                    });
                 });
-            });
-            return Command.SINGLE_SUCCESS;
-        } catch (Exception e) {
-            ctx.getSource().getSender().sendMessage(config.getMessage("player_not_found"));
-            return 0;
-        }
+            } catch (Exception e) {
+                Bukkit.getGlobalRegionScheduler().run(plugin, task -> 
+                    ctx.getSource().getSender().sendMessage(config.getMessage("player_not_found"))
+                );
+            }
+        });
+        return Command.SINGLE_SUCCESS;
     }
 
     private int executeReload(CommandContext<CommandSourceStack> ctx) {

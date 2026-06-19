@@ -16,17 +16,21 @@ import me.usainsrht.basiceconomy.api.Currency;
 import me.usainsrht.basiceconomy.impl.BasicEconomyPlugin;
 import me.usainsrht.basiceconomy.impl.account.AccountManagerImpl;
 import me.usainsrht.basiceconomy.impl.config.ConfigManager;
+import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
+import org.bukkit.plugin.java.JavaPlugin;
 
 import java.math.BigDecimal;
 import java.util.concurrent.CompletableFuture;
 
 public class PayCommand {
 
+    private final JavaPlugin plugin;
     private final AccountManagerImpl accountManager;
     private final ConfigManager config;
 
-    public PayCommand(AccountManagerImpl accountManager, ConfigManager config) {
+    public PayCommand(JavaPlugin plugin, AccountManagerImpl accountManager, ConfigManager config) {
+        this.plugin = plugin;
         this.accountManager = accountManager;
         this.config = config;
     }
@@ -90,7 +94,7 @@ public class PayCommand {
 
             accountManager.getAccount(sender.getUniqueId()).thenAccept(senderAcc -> {
                 if (senderAcc.getBalance(currency).compareTo(bdAmount) < 0) {
-                    sender.sendMessage(config.getMessage("not_enough_money"));
+                    Bukkit.getGlobalRegionScheduler().run(plugin, task -> sender.sendMessage(config.getMessage("not_enough_money")));
                     return;
                 }
 
@@ -99,12 +103,14 @@ public class PayCommand {
                         accountManager.getAccount(target.getUniqueId()).thenAccept(targetAcc -> {
                             targetAcc.addBalance(currency, bdAmount).thenAccept(added -> {
                                 if (added) {
-                                    sender.sendMessage(config.getMessage("pay_success", 
-                                            "player", target.getName(),
-                                            "amount", currency.format(bdAmount)));
-                                    target.sendMessage(config.getMessage("pay_received", 
-                                            "player", sender.getName(),
-                                            "amount", currency.format(bdAmount)));
+                                    Bukkit.getGlobalRegionScheduler().run(plugin, task -> {
+                                        sender.sendMessage(config.getMessage("pay_success", 
+                                                "player", target.getName(),
+                                                "amount", currency.format(bdAmount)));
+                                        target.sendMessage(config.getMessage("pay_received", 
+                                                "player", sender.getName(),
+                                                "amount", currency.format(bdAmount)));
+                                    });
                                 } else {
                                     // Refund on failure
                                     senderAcc.addBalance(currency, bdAmount);
@@ -112,7 +118,7 @@ public class PayCommand {
                             });
                         });
                     } else {
-                        sender.sendMessage(config.getMessage("invalid_amount"));
+                        Bukkit.getGlobalRegionScheduler().run(plugin, task -> sender.sendMessage(config.getMessage("invalid_amount")));
                     }
                 });
             });

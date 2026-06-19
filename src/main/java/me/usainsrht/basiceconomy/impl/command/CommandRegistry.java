@@ -35,13 +35,13 @@ public class CommandRegistry {
                 commands.register(moneyCmd.build(alias).build(), "BasicEconomy main command", List.of());
             }
 
-            PayCommand payCmd = new PayCommand(accountManager, config);
+            PayCommand payCmd = new PayCommand(plugin, accountManager, config);
             List<String> payAliases = config.getCommandAliases("pay");
             for (String alias : payAliases) {
                 commands.register(payCmd.build(alias).build(), "BasicEconomy pay command", List.of());
             }
 
-            BaltopCommand baltopCmd = new BaltopCommand(accountManager, config);
+            BaltopCommand baltopCmd = new BaltopCommand(plugin, accountManager, config);
             List<String> baltopAliases = config.getCommandAliases("baltop");
             for (String alias : baltopAliases) {
                 commands.register(baltopCmd.build(alias).build(), "BasicEconomy baltop command", List.of());

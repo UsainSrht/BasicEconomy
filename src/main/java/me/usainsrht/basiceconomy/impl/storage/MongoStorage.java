@@ -57,10 +57,16 @@ public class MongoStorage implements Storage {
             Bson filter = Filters.eq("uuid", uuid.toString());
             for (Document doc : collection.find(filter)) {
                 String currName = doc.getString("currency");
-                String balanceStr = doc.getString("balance");
+                Object balanceObj = doc.get("balance");
                 Currency currency = config.getCurrencies().get(currName);
-                if (currency != null && balanceStr != null) {
-                    balances.put(currency, new BigDecimal(balanceStr));
+                if (currency != null && balanceObj != null) {
+                    BigDecimal balance;
+                    if (balanceObj instanceof org.bson.types.Decimal128) {
+                        balance = ((org.bson.types.Decimal128) balanceObj).bigDecimalValue();
+                    } else {
+                        balance = new BigDecimal(balanceObj.toString());
+                    }
+                    balances.put(currency, balance);
                 }
             }
             return balances;

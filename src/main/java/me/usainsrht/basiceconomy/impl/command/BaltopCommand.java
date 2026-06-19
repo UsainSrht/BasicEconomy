@@ -14,15 +14,18 @@ import me.usainsrht.basiceconomy.impl.config.ConfigManager;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.command.CommandSender;
+import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.concurrent.CompletableFuture;
 
 public class BaltopCommand {
 
+    private final JavaPlugin plugin;
     private final AccountManagerImpl accountManager;
     private final ConfigManager config;
 
-    public BaltopCommand(AccountManagerImpl accountManager, ConfigManager config) {
+    public BaltopCommand(JavaPlugin plugin, AccountManagerImpl accountManager, ConfigManager config) {
+        this.plugin = plugin;
         this.accountManager = accountManager;
         this.config = config;
     }
@@ -71,16 +74,18 @@ public class BaltopCommand {
         sender.sendMessage(config.getMessage("baltop_header", "currency", currency.name()));
         
         accountManager.getTopAccounts(currency, 10).thenAccept(top -> {
-            int pos = 1;
-            for (var entry : top) {
-                OfflinePlayer op = Bukkit.getOfflinePlayer(entry.getKey());
-                String pName = op.getName() != null ? op.getName() : "Unknown";
-                sender.sendMessage(config.getMessage("baltop_entry", 
-                        "position", String.valueOf(pos),
-                        "player", pName,
-                        "amount", currency.format(entry.getValue())));
-                pos++;
-            }
+            Bukkit.getGlobalRegionScheduler().run(plugin, task -> {
+                int pos = 1;
+                for (var entry : top) {
+                    OfflinePlayer op = Bukkit.getOfflinePlayer(entry.getKey());
+                    String pName = op.getName() != null ? op.getName() : "Unknown";
+                    sender.sendMessage(config.getMessage("baltop_entry", 
+                            "position", String.valueOf(pos),
+                            "player", pName,
+                            "amount", currency.format(entry.getValue())));
+                    pos++;
+                }
+            });
         });
 
         return Command.SINGLE_SUCCESS;

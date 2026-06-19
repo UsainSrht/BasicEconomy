@@ -15,7 +15,7 @@ public class BasicEconomyLoader implements PluginLoader {
         MavenLibraryResolver resolver = new MavenLibraryResolver();
 
         resolver.addRepository(
-                new RemoteRepository.Builder("mavenCentral", "default", MavenLibraryResolver.MAVEN_CENTRAL_MIRROR)
+                new RemoteRepository.Builder("mavenCentral", "default", "https://repo.papermc.io/repository/maven-public/")
                         .build());
 
         // SQL Drivers

@@ -7,15 +7,15 @@ import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 
 import java.math.BigDecimal;
-import java.util.HashMap;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.Map;
 import java.util.List;
 
 public class ConfigManager {
 
     private final FileConfiguration config;
-    private final Map<String, Currency> currencies = new HashMap<>();
-    private final Map<String, Component> messages = new HashMap<>();
+    private final Map<String, Currency> currencies = new ConcurrentHashMap<>();
+    private final Map<String, Component> messages = new ConcurrentHashMap<>();
     private String defaultCurrencyName = null;
 
     public ConfigManager(FileConfiguration config) {

@@ -117,6 +117,9 @@ public class BasicEconomyPlugin extends JavaPlugin implements Listener {
                 storage = new SqlStorage(configManager);
             }
             storage.connect();
+            if (accountManager != null) {
+                accountManager.setStorage(storage);
+            }
         } catch (Exception e) {
             e.printStackTrace();
         }

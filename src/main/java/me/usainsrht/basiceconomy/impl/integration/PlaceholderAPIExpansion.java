@@ -14,6 +14,7 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 
 public class PlaceholderAPIExpansion extends PlaceholderExpansion {
@@ -35,7 +36,8 @@ public class PlaceholderAPIExpansion extends PlaceholderExpansion {
 
     @Override
     public @NotNull String getAuthor() {
-        return plugin.getDescription().getAuthors().get(0);
+        List<String> authors = plugin.getDescription().getAuthors();
+        return (authors == null || authors.isEmpty()) ? "Usain" : authors.get(0);
     }
 
     @Override
@@ -61,13 +63,15 @@ public class PlaceholderAPIExpansion extends PlaceholderExpansion {
 
             if (player == null) return "";
             
-            try {
-                Account account = accountManager.getAccountSync(player.getUniqueId()).get();
-                if (account == null) return currency.format(currency.startValue());
-                return currency.format(account.getBalance(currency));
-            } catch (InterruptedException | ExecutionException e) {
-                return "Error";
+            // Try to resolve using non-blocking getNow to see if it is cached.
+            CompletableFuture<Account> future = accountManager.getAccount(player.getUniqueId());
+            Account account = future.getNow(null);
+            
+            if (account == null) {
+                // If not cached, return the start value instead of blocking the main thread.
+                return currency.format(currency.startValue());
             }
+            return currency.format(account.getBalance(currency));
         }
 
         if (args[0].equalsIgnoreCase("baltop")) {
@@ -85,8 +89,11 @@ public class PlaceholderAPIExpansion extends PlaceholderExpansion {
             if (currency == null) return "Invalid Currency";
             
             try {
-                // Since getTopAccounts returns a cached value if available, we can join it without much lag.
-                List<Map.Entry<UUID, BigDecimal>> top = accountManager.getTopAccounts(currency, position).get();
+                // Since getTopAccounts returns a cached value if available, we can get it without lag.
+                List<Map.Entry<UUID, BigDecimal>> top = accountManager.getTopAccounts(currency, position).getNow(null);
+                if (top == null) {
+                    return "Loading...";
+                }
                 if (position > top.size() || position < 1) {
                     return "None";
                 }
@@ -94,7 +101,7 @@ public class PlaceholderAPIExpansion extends PlaceholderExpansion {
                 OfflinePlayer target = Bukkit.getOfflinePlayer(entry.getKey());
                 String name = target.getName() != null ? target.getName() : "Unknown";
                 return name + " - " + currency.format(entry.getValue());
-            } catch (InterruptedException | ExecutionException e) {
+            } catch (Exception e) {
                 return "Error";
             }
         }

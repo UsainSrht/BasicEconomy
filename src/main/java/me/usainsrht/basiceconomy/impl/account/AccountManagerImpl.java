@@ -19,9 +19,10 @@ public class AccountManagerImpl implements EconomyManager {
 
     private final JavaPlugin plugin;
     private final ConfigManager config;
-    private final Storage storage;
+    private volatile Storage storage;
     
     private final Map<UUID, AccountImpl> loadedAccounts = new ConcurrentHashMap<>();
+    private final Map<UUID, CompletableFuture<AccountImpl>> loadingAccounts = new ConcurrentHashMap<>();
     private final Map<Currency, List<Map.Entry<UUID, BigDecimal>>> baltopCache = new ConcurrentHashMap<>();
 
     public AccountManagerImpl(JavaPlugin plugin, ConfigManager config, Storage storage) {
@@ -55,20 +56,12 @@ public class AccountManagerImpl implements EconomyManager {
     }
 
     public void handleJoin(UUID uuid) {
-        loadAccount(uuid);
+        getAccount(uuid);
     }
 
     public void handleQuit(UUID uuid) {
         // We can just leave it in cache until the cleanup task removes it
         // Or remove it immediately if we want strict memory management.
-    }
-
-    private CompletableFuture<AccountImpl> loadAccount(UUID uuid) {
-        return storage.loadBalances(uuid).thenApply(balances -> {
-            AccountImpl account = new AccountImpl(uuid, balances, this);
-            loadedAccounts.put(uuid, account);
-            return account;
-        });
     }
 
     @Override
@@ -77,7 +70,18 @@ public class AccountManagerImpl implements EconomyManager {
         if (cached != null) {
             return CompletableFuture.completedFuture(cached);
         }
-        return loadAccount(uuid).thenApply(account -> account);
+        return loadingAccounts.computeIfAbsent(uuid, k -> 
+            storage.loadBalances(uuid).thenApply(balances -> {
+                AccountImpl account = new AccountImpl(uuid, balances, this);
+                loadedAccounts.put(uuid, account);
+                loadingAccounts.remove(uuid);
+                return account;
+            })
+        ).thenApply(account -> account);
+    }
+
+    public void setStorage(Storage storage) {
+        this.storage = storage;
     }
 
     @Override
