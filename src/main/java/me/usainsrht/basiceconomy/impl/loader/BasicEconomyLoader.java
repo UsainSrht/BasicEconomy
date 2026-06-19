@@ -15,7 +15,8 @@ public class BasicEconomyLoader implements PluginLoader {
         MavenLibraryResolver resolver = new MavenLibraryResolver();
 
         resolver.addRepository(
-                new RemoteRepository.Builder("mavenCentral", "default", "https://repo.papermc.io/repository/maven-public/")
+                new RemoteRepository.Builder("mavenCentral", "default",
+                        "https://repo.papermc.io/repository/maven-public/")
                         .build());
 
         // SQL Drivers
@@ -29,6 +30,8 @@ public class BasicEconomyLoader implements PluginLoader {
 
         // HikariCP
         resolver.addDependency(new Dependency(new DefaultArtifact("com.zaxxer:HikariCP:5.1.0"), null));
+
+        resolver.addDependency(new Dependency(new DefaultArtifact("redis.clients:jedis:5.1.2"), null));
 
         classpathBuilder.addLibrary(resolver);
     }
