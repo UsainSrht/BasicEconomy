@@ -14,6 +14,18 @@ storage:
   # MongoDB specific settings
   mongodb-uri: "mongodb://localhost:27017"
 
+# Multi-server Synchronization Settings
+# Enable this if you are running this plugin on multiple servers using the same remote database.
+sync:
+  # Supported types: NONE, PLUGIN_MESSAGE, REDIS
+  type: NONE
+  # Redis settings (only used if type is REDIS)
+  redis:
+    host: "localhost"
+    port: 6379
+    password: ""
+    channel: "basiceconomy:sync"
+
 # Task settings
 tasks:
   # How often (in seconds) should baltop be updated asynchronously?

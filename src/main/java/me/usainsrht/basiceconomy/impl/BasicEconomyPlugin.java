@@ -86,6 +86,9 @@ public class BasicEconomyPlugin extends JavaPlugin implements Listener {
 
     @Override
     public void onDisable() {
+        if (accountManager != null) {
+            accountManager.shutdownSync();
+        }
         if (storage != null) {
             try {
                 storage.disconnect();
@@ -122,6 +125,7 @@ public class BasicEconomyPlugin extends JavaPlugin implements Listener {
             storage.connect();
             if (accountManager != null) {
                 accountManager.setStorage(storage);
+                accountManager.initSync();
             }
         } catch (Exception e) {
             e.printStackTrace();

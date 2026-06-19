@@ -170,4 +170,24 @@ public class ConfigManager {
     public String getStorageMongoUri() {
         return config.getString("storage.mongodb-uri", "mongodb://localhost:27017");
     }
+
+    public String getSyncType() {
+        return config.getString("sync.type", "NONE").toUpperCase();
+    }
+
+    public String getRedisHost() {
+        return config.getString("sync.redis.host", "localhost");
+    }
+
+    public int getRedisPort() {
+        return config.getInt("sync.redis.port", 6379);
+    }
+
+    public String getRedisPassword() {
+        return config.getString("sync.redis.password", "");
+    }
+
+    public String getRedisChannel() {
+        return config.getString("sync.redis.channel", "basiceconomy:sync");
+    }
 }

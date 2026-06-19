@@ -42,6 +42,7 @@ public class AccountImpl implements Account {
         writeQueue = writeQueue.thenCompose(v -> 
             manager.saveBalance(uuid, currency, amount)
         ).thenAccept(v -> {
+            manager.notifyBalanceUpdate(uuid, currency, amount);
             resultFuture.complete(true);
         }).exceptionally(ex -> {
             ex.printStackTrace();
@@ -50,6 +51,10 @@ public class AccountImpl implements Account {
         });
         
         return resultFuture;
+    }
+
+    public synchronized void updateBalanceInMemory(Currency currency, BigDecimal amount) {
+        balances.put(currency, amount);
     }
 
     @Override

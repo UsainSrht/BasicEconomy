@@ -24,16 +24,25 @@ dependencies {
     // bStats
     implementation("org.bstats:bstats-bukkit:3.0.2")
     
+    // Jedis for Redis sync
+    implementation("redis.clients:jedis:5.1.2")
+    
     // HikariCP for SQL
     compileOnly("com.zaxxer:HikariCP:5.1.0")
 }
 
 java {
+    toolchain {
+        languageVersion.set(JavaLanguageVersion.of(21))
+    }
 }
 
 tasks {
     shadowJar {
         relocate("org.bstats", "me.usainsrht.basiceconomy.lib.bstats")
+        relocate("redis.clients", "me.usainsrht.basiceconomy.lib.jedis")
+        relocate("org.apache.commons.pool2", "me.usainsrht.basiceconomy.lib.commonspool2")
+        relocate("org.json", "me.usainsrht.basiceconomy.lib.json")
     }
 
     build {
