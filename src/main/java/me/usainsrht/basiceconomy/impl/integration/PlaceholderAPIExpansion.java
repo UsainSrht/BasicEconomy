@@ -37,7 +37,7 @@ public class PlaceholderAPIExpansion extends PlaceholderExpansion {
     @Override
     public @NotNull String getAuthor() {
         List<String> authors = plugin.getDescription().getAuthors();
-        return (authors == null || authors.isEmpty()) ? "Usain" : authors.get(0);
+        return (authors == null || authors.isEmpty()) ? "UsainSrht" : authors.get(0);
     }
 
     @Override
@@ -53,20 +53,33 @@ public class PlaceholderAPIExpansion extends PlaceholderExpansion {
     @Override
     public String onRequest(OfflinePlayer player, @NotNull String params) {
         String[] args = params.split("_");
-        if (args.length < 2) return null;
+        if (args.length < 2)
+            return null;
 
         if (args[0].equalsIgnoreCase("balance")) {
+            // Support:
+            // %basiceconomy_balance%
             // %basiceconomy_balance_<currency>%
-            String currName = args[1];
-            Currency currency = accountManager.getCurrency(currName);
-            if (currency == null) return "Invalid Currency";
+            Currency currency;
+            if (args.length >= 2) {
+                currency = accountManager.getCurrency(args[1]);
+                if (currency == null) {
+                    return "Invalid Currency";
+                }
+            } else {
+                currency = accountManager.getDefaultCurrency();
+                if (currency == null) {
+                    return "Invalid Currency";
+                }
+            }
 
-            if (player == null) return "";
-            
+            if (player == null)
+                return "";
+
             // Try to resolve using non-blocking getNow to see if it is cached.
             CompletableFuture<Account> future = accountManager.getAccount(player.getUniqueId());
             Account account = future.getNow(null);
-            
+
             if (account == null) {
                 // If not cached, return the start value instead of blocking the main thread.
                 return currency.format(currency.startValue());
@@ -75,19 +88,43 @@ public class PlaceholderAPIExpansion extends PlaceholderExpansion {
         }
 
         if (args[0].equalsIgnoreCase("baltop")) {
+            // Support:
+            // %basiceconomy_baltop_<position>%
             // %basiceconomy_baltop_<position>_<currency>%
-            if (args.length < 3) return null;
-            int position;
-            try {
-                position = Integer.parseInt(args[1]);
-            } catch (NumberFormatException e) {
+            // %basiceconomy_baltop_name_<position>%
+            // %basiceconomy_baltop_name_<position>_<currency>%
+            // %basiceconomy_baltop_balance_<position>%
+            // %basiceconomy_baltop_balance_<position>_<currency>%
+            
+            boolean hasType = args.length >= 2 && (args[1].equalsIgnoreCase("name") || args[1].equalsIgnoreCase("balance"));
+            int typeOffset = hasType ? 1 : 0;
+            int positionIdx = 1 + typeOffset;
+            int currencyIdx = 2 + typeOffset;
+            
+            if (args.length <= positionIdx) {
                 return null;
             }
             
-            String currName = args[2];
-            Currency currency = accountManager.getCurrency(currName);
-            if (currency == null) return "Invalid Currency";
-            
+            int position;
+            try {
+                position = Integer.parseInt(args[positionIdx]);
+            } catch (NumberFormatException e) {
+                return null;
+            }
+
+            Currency currency;
+            if (args.length > currencyIdx) {
+                currency = accountManager.getCurrency(args[currencyIdx]);
+                if (currency == null) {
+                    return "Invalid Currency";
+                }
+            } else {
+                currency = accountManager.getDefaultCurrency();
+                if (currency == null) {
+                    return "Invalid Currency";
+                }
+            }
+
             try {
                 // Since getTopAccounts returns a cached value if available, we can get it without lag.
                 List<Map.Entry<UUID, BigDecimal>> top = accountManager.getTopAccounts(currency, position).getNow(null);
@@ -98,9 +135,23 @@ public class PlaceholderAPIExpansion extends PlaceholderExpansion {
                     return "None";
                 }
                 Map.Entry<UUID, BigDecimal> entry = top.get(position - 1);
-                OfflinePlayer target = Bukkit.getOfflinePlayer(entry.getKey());
-                String name = target.getName() != null ? target.getName() : "Unknown";
-                return name + " - " + currency.format(entry.getValue());
+                
+                String name = null;
+                if (!hasType || args[1].equalsIgnoreCase("name")) {
+                    OfflinePlayer target = Bukkit.getOfflinePlayer(entry.getKey());
+                    name = target.getName() != null ? target.getName() : "Unknown";
+                }
+                
+                String balanceStr = null;
+                if (!hasType || args[1].equalsIgnoreCase("balance")) {
+                    balanceStr = currency.format(entry.getValue());
+                }
+                
+                if (hasType) {
+                    return args[1].equalsIgnoreCase("name") ? name : balanceStr;
+                } else {
+                    return name + " - " + balanceStr;
+                }
             } catch (Exception e) {
                 return "Error";
             }

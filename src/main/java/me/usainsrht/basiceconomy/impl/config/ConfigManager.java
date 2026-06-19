@@ -13,7 +13,7 @@ import java.util.List;
 
 public class ConfigManager {
 
-    private final FileConfiguration config;
+    private FileConfiguration config;
     private final Map<String, Currency> currencies = new ConcurrentHashMap<>();
     private final Map<String, Component> messages = new ConcurrentHashMap<>();
     private String defaultCurrencyName = null;
@@ -21,6 +21,10 @@ public class ConfigManager {
     public ConfigManager(FileConfiguration config) {
         this.config = config;
         load();
+    }
+
+    public void setConfig(FileConfiguration config) {
+        this.config = config;
     }
 
     public void load() {

@@ -108,7 +108,10 @@ public class BasicEconomyPlugin extends JavaPlugin implements Listener {
 
     public void reload() {
         reloadConfig();
-        configManager.load();
+        if (configManager != null) {
+            configManager.setConfig(getConfig());
+            configManager.load();
+        }
         try {
             storage.disconnect();
             if (configManager.getStorageType().equals("MONGODB")) {
