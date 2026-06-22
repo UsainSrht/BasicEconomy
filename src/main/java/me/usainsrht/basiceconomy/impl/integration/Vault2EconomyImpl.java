@@ -296,7 +296,10 @@ public class Vault2EconomyImpl implements Economy {
 
     @Override
     public String format(String currency, BigDecimal amount) {
-        me.usainsrht.basiceconomy.api.Currency cur = accountManager.getCurrency(currency);
+        me.usainsrht.basiceconomy.api.Currency cur = currency != null ? accountManager.getCurrency(currency) : null;
+        if (cur == null) {
+            cur = getDefaultCurrency();
+        }
         if (cur == null) return amount.toString();
         return cur.format(amount);
     }
@@ -308,7 +311,7 @@ public class Vault2EconomyImpl implements Economy {
 
     @Override
     public String format(BigDecimal amount, String worldOrCurrency) {
-        if (accountManager.getCurrency(worldOrCurrency) != null) {
+        if (worldOrCurrency != null && accountManager.getCurrency(worldOrCurrency) != null) {
             return format(worldOrCurrency, amount);
         }
         me.usainsrht.basiceconomy.api.Currency def = getDefaultCurrency();

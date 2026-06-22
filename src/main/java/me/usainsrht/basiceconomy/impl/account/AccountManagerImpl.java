@@ -143,6 +143,7 @@ public class AccountManagerImpl implements EconomyManager {
 
     @Override
     public Currency getCurrency(String name) {
+        if (name == null) return null;
         return config.getCurrencies().get(name.toLowerCase());
     }
 
