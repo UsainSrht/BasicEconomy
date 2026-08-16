@@ -126,6 +126,7 @@ public class BasicEconomyPlugin extends JavaPlugin implements Listener {
             if (accountManager != null) {
                 accountManager.setStorage(storage);
                 accountManager.initSync();
+                accountManager.repairOnStartup();
             }
         } catch (Exception e) {
             e.printStackTrace();

@@ -58,7 +58,7 @@ public class MongoStorage implements Storage {
             for (Document doc : collection.find(filter)) {
                 String currName = doc.getString("currency");
                 Object balanceObj = doc.get("balance");
-                Currency currency = config.getCurrencies().get(currName);
+                Currency currency = config.getCurrencies().get(currName.toLowerCase());
                 if (currency != null && balanceObj != null) {
                     BigDecimal balance;
                     if (balanceObj instanceof org.bson.types.Decimal128) {

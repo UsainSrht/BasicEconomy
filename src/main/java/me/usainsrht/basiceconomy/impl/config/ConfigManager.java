@@ -7,15 +7,20 @@ import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 
 import java.math.BigDecimal;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.Map;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 public class ConfigManager {
 
     private FileConfiguration config;
     private final Map<String, Currency> currencies = new ConcurrentHashMap<>();
     private final Map<String, Component> messages = new ConcurrentHashMap<>();
+    private final Set<UUID> baltopHiddenPlayers = ConcurrentHashMap.newKeySet();
     private String defaultCurrencyName = null;
 
     public ConfigManager(FileConfiguration config) {
@@ -30,7 +35,15 @@ public class ConfigManager {
     public void load() {
         currencies.clear();
         messages.clear();
+        baltopHiddenPlayers.clear();
         defaultCurrencyName = null;
+
+        for (String uuidStr : config.getStringList("baltop-hidden-players")) {
+            try {
+                baltopHiddenPlayers.add(UUID.fromString(uuidStr));
+            } catch (IllegalArgumentException ignored) {
+            }
+        }
 
         String firstLoadedCurrency = null;
         ConfigurationSection currencySection = config.getConfigurationSection("currencies");
@@ -189,5 +202,37 @@ public class ConfigManager {
 
     public String getRedisChannel() {
         return config.getString("sync.redis.channel", "basiceconomy:sync");
+    }
+
+    public Set<UUID> getBaltopHiddenPlayers() {
+        return Collections.unmodifiableSet(baltopHiddenPlayers);
+    }
+
+    public boolean isBaltopHidden(UUID uuid) {
+        return baltopHiddenPlayers.contains(uuid);
+    }
+
+    public boolean addBaltopHiddenPlayer(UUID uuid) {
+        if (!baltopHiddenPlayers.add(uuid)) {
+            return false;
+        }
+        saveBaltopHiddenPlayers();
+        return true;
+    }
+
+    public boolean removeBaltopHiddenPlayer(UUID uuid) {
+        if (!baltopHiddenPlayers.remove(uuid)) {
+            return false;
+        }
+        saveBaltopHiddenPlayers();
+        return true;
+    }
+
+    private void saveBaltopHiddenPlayers() {
+        List<String> uuids = baltopHiddenPlayers.stream()
+                .map(UUID::toString)
+                .sorted()
+                .collect(Collectors.toList());
+        config.set("baltop-hidden-players", uuids);
     }
 }

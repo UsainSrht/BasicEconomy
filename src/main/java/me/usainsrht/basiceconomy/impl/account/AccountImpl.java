@@ -57,6 +57,11 @@ public class AccountImpl implements Account {
         balances.put(currency, amount);
     }
 
+    public synchronized void reloadBalances(Map<Currency, BigDecimal> newBalances) {
+        balances.clear();
+        balances.putAll(newBalances);
+    }
+
     @Override
     public synchronized CompletableFuture<Boolean> addBalance(Currency currency, BigDecimal amount) {
         if (amount.compareTo(BigDecimal.ZERO) <= 0) return CompletableFuture.completedFuture(false);

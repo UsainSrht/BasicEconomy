@@ -88,7 +88,7 @@ public class SqlStorage implements Storage {
                     while (rs.next()) {
                         String currName = rs.getString("currency");
                         BigDecimal balance = rs.getBigDecimal("balance");
-                        Currency currency = config.getCurrencies().get(currName);
+                        Currency currency = config.getCurrencies().get(currName.toLowerCase());
                         if (currency != null) {
                             balances.put(currency, balance);
                         }

@@ -44,6 +44,7 @@ public class AccountManagerImpl implements EconomyManager {
     }
     
     private final Map<UUID, OfflineCacheEntry> offlineCache = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<UUID, Object> loadLocks = new ConcurrentHashMap<>();
     private volatile SyncProvider syncProvider;
 
     public AccountManagerImpl(BasicEconomyPlugin plugin, ConfigManager config, Storage storage) {
@@ -52,6 +53,7 @@ public class AccountManagerImpl implements EconomyManager {
         this.storage = storage;
         startTasks();
         initSync();
+        repairOnStartup();
     }
 
     private void startTasks() {
@@ -62,10 +64,15 @@ public class AccountManagerImpl implements EconomyManager {
         Bukkit.getAsyncScheduler().runAtFixedRate(plugin, task -> cleanupCache(), cacheInterval, cacheInterval, java.util.concurrent.TimeUnit.SECONDS);
     }
 
+    public void refreshBaltopCache() {
+        updateBaltopCache();
+    }
+
     private void updateBaltopCache() {
+        int fetchLimit = 100 + config.getBaltopHiddenPlayers().size();
         for (Currency currency : config.getCurrencies().values()) {
             if (currency.baltopEnabled()) {
-                storage.getTopBalances(currency, 100).thenAccept(top -> {
+                storage.getTopBalances(currency, fetchLimit).thenAccept(top -> {
                     baltopCache.put(currency, top);
                 });
             }
@@ -80,13 +87,69 @@ public class AccountManagerImpl implements EconomyManager {
     }
 
     public void handleJoin(UUID uuid) {
+        invalidateAccount(uuid);
         getAccount(uuid);
     }
 
     public void handleQuit(UUID uuid) {
         // Remove immediately on quit so other servers can safely own the online cache
+        invalidateAccount(uuid);
+    }
+
+    public void invalidateAccount(UUID uuid) {
         loadedAccounts.remove(uuid);
         offlineCache.remove(uuid);
+        CompletableFuture<AccountImpl> loading = loadingAccounts.remove(uuid);
+        if (loading != null && !loading.isDone()) {
+            loading.cancel(false);
+        }
+    }
+
+    /**
+     * Clears any stale in-memory state left by failed loads and reloads online players from storage.
+     */
+    public void repairOnStartup() {
+        loadedAccounts.clear();
+        offlineCache.clear();
+        loadingAccounts.clear();
+
+        refreshBaltopCache();
+
+        for (org.bukkit.entity.Player player : Bukkit.getOnlinePlayers()) {
+            getAccount(player.getUniqueId()).whenComplete((account, error) -> {
+                if (error != null) {
+                    plugin.getLogger().warning("Failed to repair account for " + player.getName() + ": " + error.getMessage());
+                } else if (account instanceof AccountImpl accountImpl) {
+                    verifyAccountAgainstStorage(player.getUniqueId(), accountImpl);
+                }
+            });
+        }
+
+        plugin.getLogger().info("Rebuilt account cache from storage for " + Bukkit.getOnlinePlayers().size() + " online player(s).");
+    }
+
+    private void verifyAccountAgainstStorage(UUID uuid, AccountImpl account) {
+        storage.loadBalances(uuid).whenComplete((dbBalances, error) -> {
+            if (error != null || dbBalances == null) {
+                return;
+            }
+            if (dbBalances.isEmpty()) {
+                return;
+            }
+
+            boolean desynced = false;
+            for (Map.Entry<Currency, BigDecimal> entry : dbBalances.entrySet()) {
+                if (account.getBalance(entry.getKey()).compareTo(entry.getValue()) != 0) {
+                    desynced = true;
+                    break;
+                }
+            }
+
+            if (desynced) {
+                plugin.getLogger().warning("Repairing desynced in-memory balances for " + uuid);
+                account.reloadBalances(dbBalances);
+            }
+        });
     }
 
     @Override
@@ -97,28 +160,75 @@ public class AccountManagerImpl implements EconomyManager {
             if (cached != null) {
                 return CompletableFuture.completedFuture(cached);
             }
-            return loadingAccounts.computeIfAbsent(uuid, k -> 
-                storage.loadBalances(uuid).thenApply(balances -> {
-                    AccountImpl account = new AccountImpl(uuid, balances, this);
-                    loadedAccounts.put(uuid, account);
-                    loadingAccounts.remove(uuid);
-                    return account;
-                })
-            ).thenApply(account -> account);
+            return loadAccount(uuid, true);
         } else {
             // Offline player: cache with a short TTL to prevent spam
             OfflineCacheEntry entry = offlineCache.get(uuid);
             if (entry != null && !entry.isExpired()) {
                 return CompletableFuture.completedFuture(entry.account);
             }
-            return loadingAccounts.computeIfAbsent(uuid, k -> 
-                storage.loadBalances(uuid).thenApply(balances -> {
-                    AccountImpl account = new AccountImpl(uuid, balances, this);
-                    offlineCache.put(uuid, new OfflineCacheEntry(account));
+            return loadAccount(uuid, false);
+        }
+    }
+
+    private CompletableFuture<Account> loadAccount(UUID uuid, boolean online) {
+        CompletableFuture<AccountImpl> inFlight = loadingAccounts.get(uuid);
+        if (inFlight != null) {
+            if (inFlight.isCompletedExceptionally()) {
+                loadingAccounts.remove(uuid, inFlight);
+            } else {
+                return inFlight.thenApply(account -> account);
+            }
+        }
+
+        Object lock = loadLocks.computeIfAbsent(uuid, ignored -> new Object());
+        synchronized (lock) {
+            try {
+                if (online) {
+                    AccountImpl cached = loadedAccounts.get(uuid);
+                    if (cached != null) {
+                        return CompletableFuture.completedFuture(cached);
+                    }
+                } else {
+                    OfflineCacheEntry entry = offlineCache.get(uuid);
+                    if (entry != null && !entry.isExpired()) {
+                        return CompletableFuture.completedFuture(entry.account);
+                    }
+                }
+
+                inFlight = loadingAccounts.get(uuid);
+                if (inFlight != null) {
+                    if (inFlight.isCompletedExceptionally()) {
+                        loadingAccounts.remove(uuid, inFlight);
+                    } else {
+                        return inFlight.thenApply(account -> account);
+                    }
+                }
+
+                CompletableFuture<AccountImpl> result = new CompletableFuture<>();
+                loadingAccounts.put(uuid, result);
+
+                storage.loadBalances(uuid).whenComplete((balances, error) -> {
                     loadingAccounts.remove(uuid);
-                    return account;
-                })
-            ).thenApply(account -> account);
+                    if (error != null) {
+                        result.completeExceptionally(error);
+                        return;
+                    }
+
+                    AccountImpl account = new AccountImpl(uuid, balances, this);
+                    if (Bukkit.getPlayer(uuid) != null) {
+                        loadedAccounts.put(uuid, account);
+                        offlineCache.remove(uuid);
+                    } else {
+                        offlineCache.put(uuid, new OfflineCacheEntry(account));
+                    }
+                    result.complete(account);
+                });
+
+                return result.thenApply(account -> account);
+            } finally {
+                loadLocks.remove(uuid, lock);
+            }
         }
     }
 
@@ -128,11 +238,27 @@ public class AccountManagerImpl implements EconomyManager {
 
     @Override
     public CompletableFuture<Account> getAccountSync(UUID uuid) {
+        AccountImpl cached = loadedAccounts.get(uuid);
+        if (cached != null) {
+            return CompletableFuture.completedFuture(cached);
+        }
+
+        OfflineCacheEntry entry = offlineCache.get(uuid);
+        if (entry != null && !entry.isExpired()) {
+            return CompletableFuture.completedFuture(entry.account);
+        }
+
         try {
             return CompletableFuture.completedFuture(getAccount(uuid).join());
         } catch (Exception e) {
-            e.printStackTrace();
-            return CompletableFuture.completedFuture(null);
+            plugin.getLogger().warning("Account load failed for " + uuid + ", retrying from storage.");
+            invalidateAccount(uuid);
+            try {
+                return CompletableFuture.completedFuture(getAccount(uuid).join());
+            } catch (Exception retryError) {
+                retryError.printStackTrace();
+                return CompletableFuture.completedFuture(null);
+            }
         }
     }
 
@@ -156,9 +282,18 @@ public class AccountManagerImpl implements EconomyManager {
     public CompletableFuture<List<Map.Entry<UUID, BigDecimal>>> getTopAccounts(Currency currency, int limit) {
         List<Map.Entry<UUID, BigDecimal>> cached = baltopCache.get(currency);
         if (cached != null) {
-            return CompletableFuture.completedFuture(cached.stream().limit(limit).collect(Collectors.toList()));
+            return CompletableFuture.completedFuture(filterBaltop(cached, limit));
         }
-        return storage.getTopBalances(currency, limit);
+        int fetchLimit = Math.max(limit + config.getBaltopHiddenPlayers().size(), 100);
+        return storage.getTopBalances(currency, fetchLimit).thenApply(top -> filterBaltop(top, limit));
+    }
+
+    private List<Map.Entry<UUID, BigDecimal>> filterBaltop(List<Map.Entry<UUID, BigDecimal>> top, int limit) {
+        Set<UUID> hidden = config.getBaltopHiddenPlayers();
+        return top.stream()
+                .filter(entry -> !hidden.contains(entry.getKey()))
+                .limit(limit)
+                .collect(Collectors.toList());
     }
 
     public CompletableFuture<Void> saveBalance(UUID uuid, Currency currency, BigDecimal amount) {

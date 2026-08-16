@@ -33,6 +33,9 @@ tasks:
   # How often (in seconds) should offline caches be cleared?
   cache-cleanup-interval: 600
 
+# Players hidden from /baltop and baltop placeholders (stored as UUIDs)
+baltop-hidden-players: []
+
 # Commands
 commands:
   money:
@@ -77,6 +80,15 @@ commands:
     name: "baltop"
     aliases: []
     permission: "basiceconomy.command.baltop"
+    subcommands:
+      hide:
+        name: "hide"
+        aliases: []
+        permission: "basiceconomy.command.baltop.hide"
+      unhide:
+        name: "unhide"
+        aliases: []
+        permission: "basiceconomy.command.baltop.unhide"
 
 # Currencies
 default-currency: "coins"
@@ -129,6 +141,10 @@ messages:
   baltop_header: "<gold>--- Top Balances (<currency>) ---</gold>"
   baltop_entry: "<gray><position>. <player>: <yellow><amount></yellow></gray>"
   baltop_disabled: "<red>Baltop is disabled for this currency.</red>"
+  baltop_hide_success: "<green>Hidden <player> from baltop.</green>"
+  baltop_unhide_success: "<green>Unhidden <player> from baltop.</green>"
+  baltop_already_hidden: "<red><player> is already hidden from baltop.</red>"
+  baltop_not_hidden: "<red><player> is not hidden from baltop.</red>"
   
   reloaded: "<green>Plugin reloaded successfully.</green>"
   
@@ -144,6 +160,8 @@ messages:
     <gray>/money remove <player> <amount> [currency] - Remove balance</gray>
     <gray>/pay <player> <amount> [currency] - Pay player</gray>
     <gray>/baltop [currency] - Show balance top list</gray>
+    <gray>/baltop hide <player> - Hide a player from baltop</gray>
+    <gray>/baltop unhide <player> - Unhide a player from baltop</gray>
     
   money_info: |
     <gold>--- BasicEconomy Info ---</gold>

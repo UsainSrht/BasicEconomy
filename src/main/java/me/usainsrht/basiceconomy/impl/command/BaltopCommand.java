@@ -14,8 +14,11 @@ import me.usainsrht.basiceconomy.impl.config.ConfigManager;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.command.CommandSender;
+import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 public class BaltopCommand {
@@ -44,7 +47,31 @@ public class BaltopCommand {
                     .executes(ctx -> execute(ctx, StringArgumentType.getString(ctx, "currency"))));
         }
 
+        registerPlayerSubcommand(cmd, "hide", this::executeHide);
+        registerPlayerSubcommand(cmd, "unhide", this::executeUnhide);
+
         return cmd;
+    }
+
+    private void registerPlayerSubcommand(
+            LiteralArgumentBuilder<CommandSourceStack> cmd,
+            String subKey,
+            java.util.function.Function<CommandContext<CommandSourceStack>, Integer> executor
+    ) {
+        String subName = config.getSubcommandName("baltop", subKey);
+        String permission = config.getSubcommandPermission(
+                "baltop", subKey, config.getCommandPermission("baltop") + "." + subKey);
+        List<String> subNames = new ArrayList<>();
+        subNames.add(subName);
+        subNames.addAll(config.getSubcommandAliases("baltop", subKey));
+
+        for (String name : subNames) {
+            cmd.then(Commands.literal(name)
+                    .requires(src -> src.getSender().hasPermission(permission))
+                    .then(Commands.argument("player", StringArgumentType.word())
+                            .suggests(this::suggestPlayers)
+                            .executes(executor::apply)));
+        }
     }
 
     private CompletableFuture<Suggestions> suggestCurrencies(CommandContext<CommandSourceStack> context, SuggestionsBuilder builder) {
@@ -52,6 +79,17 @@ public class BaltopCommand {
         for (String cur : config.getCurrencies().keySet()) {
             if (cur.startsWith(input)) {
                 builder.suggest(cur);
+            }
+        }
+        return builder.buildFuture();
+    }
+
+    private CompletableFuture<Suggestions> suggestPlayers(CommandContext<CommandSourceStack> context, SuggestionsBuilder builder) {
+        String input = builder.getRemaining().toLowerCase();
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            String name = player.getName();
+            if (name.toLowerCase().startsWith(input)) {
+                builder.suggest(name);
             }
         }
         return builder.buildFuture();
@@ -89,5 +127,59 @@ public class BaltopCommand {
         });
 
         return Command.SINGLE_SUCCESS;
+    }
+
+    private int executeHide(CommandContext<CommandSourceStack> ctx) {
+        return executeHideToggle(ctx, true);
+    }
+
+    private int executeUnhide(CommandContext<CommandSourceStack> ctx) {
+        return executeHideToggle(ctx, false);
+    }
+
+    private int executeHideToggle(CommandContext<CommandSourceStack> ctx, boolean hide) {
+        CommandSender sender = ctx.getSource().getSender();
+
+        CompletableFuture.runAsync(() -> {
+            OfflinePlayer target = resolvePlayer(StringArgumentType.getString(ctx, "player"));
+            if (target == null) {
+                Bukkit.getGlobalRegionScheduler().run(plugin, task ->
+                        sender.sendMessage(config.getMessage("player_not_found")));
+                return;
+            }
+
+            String playerName = target.getName() != null ? target.getName() : target.getUniqueId().toString();
+            boolean changed = hide
+                    ? config.addBaltopHiddenPlayer(target.getUniqueId())
+                    : config.removeBaltopHiddenPlayer(target.getUniqueId());
+
+            Bukkit.getGlobalRegionScheduler().run(plugin, task -> {
+                if (!changed) {
+                    sender.sendMessage(config.getMessage(
+                            hide ? "baltop_already_hidden" : "baltop_not_hidden",
+                            "player", playerName));
+                    return;
+                }
+
+                plugin.saveConfig();
+                accountManager.refreshBaltopCache();
+                sender.sendMessage(config.getMessage(
+                        hide ? "baltop_hide_success" : "baltop_unhide_success",
+                        "player", playerName));
+            });
+        });
+
+        return Command.SINGLE_SUCCESS;
+    }
+
+    private OfflinePlayer resolvePlayer(String targetName) {
+        OfflinePlayer target = Bukkit.getPlayer(targetName);
+        if (target == null) {
+            target = Bukkit.getOfflinePlayer(targetName);
+            if (!target.hasPlayedBefore()) {
+                return null;
+            }
+        }
+        return target;
     }
 }
