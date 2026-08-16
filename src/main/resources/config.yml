@@ -68,6 +68,9 @@ commands:
         aliases:
           - "?"
         permission: "basiceconomy.command.money.help"
+      others:
+        name: "others"
+        permission: "basiceconomy.command.money.others"
       info:
         name: "info"
         aliases: []

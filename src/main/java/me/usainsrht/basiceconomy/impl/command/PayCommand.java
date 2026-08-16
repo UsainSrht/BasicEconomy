@@ -10,13 +10,12 @@ import com.mojang.brigadier.suggestion.Suggestions;
 import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
-import io.papermc.paper.command.brigadier.argument.ArgumentTypes;
-import io.papermc.paper.command.brigadier.argument.resolvers.selector.PlayerSelectorArgumentResolver;
 import me.usainsrht.basiceconomy.api.Currency;
-import me.usainsrht.basiceconomy.impl.BasicEconomyPlugin;
 import me.usainsrht.basiceconomy.impl.account.AccountManagerImpl;
 import me.usainsrht.basiceconomy.impl.config.ConfigManager;
+import me.usainsrht.basiceconomy.impl.util.PlayerVisibility;
 import org.bukkit.Bukkit;
+import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -41,7 +40,8 @@ public class PayCommand {
 
         boolean singleCurrency = config.getCurrencies().size() <= 1;
 
-        RequiredArgumentBuilder<CommandSourceStack, PlayerSelectorArgumentResolver> targetNode = Commands.argument("target", ArgumentTypes.player());
+        RequiredArgumentBuilder<CommandSourceStack, String> targetNode = Commands.argument("target", StringArgumentType.word())
+                .suggests(this::suggestPayPlayers);
         RequiredArgumentBuilder<CommandSourceStack, Double> amountNode = Commands.argument("amount", DoubleArgumentType.doubleArg(0.01));
 
         amountNode.executes(ctx -> execute(ctx, null));
@@ -56,6 +56,22 @@ public class PayCommand {
         cmd.then(targetNode);
 
         return cmd;
+    }
+
+    private CompletableFuture<Suggestions> suggestPayPlayers(CommandContext<CommandSourceStack> context, SuggestionsBuilder builder) {
+        CommandSender sender = context.getSource().getSender();
+        return CompletableFuture.supplyAsync(() -> {
+            String input = builder.getRemaining().toLowerCase();
+            for (Player p : Bukkit.getOnlinePlayers()) {
+                if (PlayerVisibility.canSeePlayer(sender, p)) {
+                    String name = p.getName();
+                    if (name.toLowerCase().startsWith(input)) {
+                        builder.suggest(name);
+                    }
+                }
+            }
+            return builder.build();
+        });
     }
 
     private CompletableFuture<Suggestions> suggestCurrencies(CommandContext<CommandSourceStack> context, SuggestionsBuilder builder) {
@@ -82,51 +98,65 @@ public class PayCommand {
             return 0;
         }
 
-        try {
-            Player target = ctx.getArgument("target", PlayerSelectorArgumentResolver.class).resolve(ctx.getSource()).get(0);
-            if (sender.getUniqueId().equals(target.getUniqueId())) {
-                sender.sendMessage(config.getMessage("cannot_pay_self"));
-                return 0;
-            }
+        String targetName = StringArgumentType.getString(ctx, "target");
+        double amount = DoubleArgumentType.getDouble(ctx, "amount");
+        BigDecimal bdAmount = BigDecimal.valueOf(amount);
 
-            double amount = DoubleArgumentType.getDouble(ctx, "amount");
-            BigDecimal bdAmount = BigDecimal.valueOf(amount);
+        CompletableFuture.runAsync(() -> {
+            try {
+                Player target = Bukkit.getPlayerExact(targetName);
+                if (target == null) {
+                    target = Bukkit.getPlayer(targetName);
+                }
 
-            accountManager.getAccount(sender.getUniqueId()).thenAccept(senderAcc -> {
-                if (senderAcc.getBalance(currency).compareTo(bdAmount) < 0) {
-                    Bukkit.getGlobalRegionScheduler().run(plugin, task -> sender.sendMessage(config.getMessage("not_enough_money")));
+                if (target == null || !PlayerVisibility.canSeePlayer(sender, target)) {
+                    Bukkit.getGlobalRegionScheduler().run(plugin, task ->
+                            sender.sendMessage(config.getMessage("player_not_found")));
                     return;
                 }
 
-                senderAcc.removeBalance(currency, bdAmount).thenAccept(removed -> {
-                    if (removed) {
-                        accountManager.getAccount(target.getUniqueId()).thenAccept(targetAcc -> {
-                            targetAcc.addBalance(currency, bdAmount).thenAccept(added -> {
-                                if (added) {
-                                    Bukkit.getGlobalRegionScheduler().run(plugin, task -> {
-                                        sender.sendMessage(config.getMessage("pay_success", 
-                                                "player", target.getName(),
-                                                "amount", currency.format(bdAmount)));
-                                        target.sendMessage(config.getMessage("pay_received", 
-                                                "player", sender.getName(),
-                                                "amount", currency.format(bdAmount)));
-                                    });
-                                } else {
-                                    // Refund on failure
-                                    senderAcc.addBalance(currency, bdAmount);
-                                }
-                            });
-                        });
-                    } else {
-                        Bukkit.getGlobalRegionScheduler().run(plugin, task -> sender.sendMessage(config.getMessage("invalid_amount")));
-                    }
-                });
-            });
+                if (sender.getUniqueId().equals(target.getUniqueId())) {
+                    Bukkit.getGlobalRegionScheduler().run(plugin, task ->
+                            sender.sendMessage(config.getMessage("cannot_pay_self")));
+                    return;
+                }
 
-            return Command.SINGLE_SUCCESS;
-        } catch (Exception e) {
-            sender.sendMessage(config.getMessage("player_not_found"));
-            return 0;
-        }
+                final Player finalTarget = target;
+                accountManager.getAccount(sender.getUniqueId()).thenAccept(senderAcc -> {
+                    if (senderAcc.getBalance(currency).compareTo(bdAmount) < 0) {
+                        Bukkit.getGlobalRegionScheduler().run(plugin, task -> sender.sendMessage(config.getMessage("not_enough_money")));
+                        return;
+                    }
+
+                    senderAcc.removeBalance(currency, bdAmount).thenAccept(removed -> {
+                        if (removed) {
+                            accountManager.getAccount(finalTarget.getUniqueId()).thenAccept(targetAcc -> {
+                                targetAcc.addBalance(currency, bdAmount).thenAccept(added -> {
+                                    if (added) {
+                                        Bukkit.getGlobalRegionScheduler().run(plugin, task -> {
+                                            sender.sendMessage(config.getMessage("pay_success",
+                                                    "player", finalTarget.getName(),
+                                                    "amount", currency.format(bdAmount)));
+                                            finalTarget.sendMessage(config.getMessage("pay_received",
+                                                    "player", sender.getName(),
+                                                    "amount", currency.format(bdAmount)));
+                                        });
+                                    } else {
+                                        // Refund on failure
+                                        senderAcc.addBalance(currency, bdAmount);
+                                    }
+                                });
+                            });
+                        } else {
+                            Bukkit.getGlobalRegionScheduler().run(plugin, task -> sender.sendMessage(config.getMessage("invalid_amount")));
+                        }
+                    });
+                });
+            } catch (Exception e) {
+                Bukkit.getGlobalRegionScheduler().run(plugin, task -> sender.sendMessage(config.getMessage("player_not_found")));
+            }
+        });
+
+        return Command.SINGLE_SUCCESS;
     }
 }

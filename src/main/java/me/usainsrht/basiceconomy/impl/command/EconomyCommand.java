@@ -15,9 +15,11 @@ import me.usainsrht.basiceconomy.api.Currency;
 import me.usainsrht.basiceconomy.impl.BasicEconomyPlugin;
 import me.usainsrht.basiceconomy.impl.account.AccountManagerImpl;
 import me.usainsrht.basiceconomy.impl.config.ConfigManager;
+import me.usainsrht.basiceconomy.impl.util.PlayerVisibility;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
+import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 
 import java.math.BigDecimal;
@@ -161,14 +163,38 @@ public class EconomyCommand {
     }
 
     private CompletableFuture<Suggestions> suggestPlayers(CommandContext<CommandSourceStack> context, SuggestionsBuilder builder) {
-        String input = builder.getRemaining().toLowerCase();
-        for (Player player : Bukkit.getOnlinePlayers()) {
-            String name = player.getName();
-            if (name.toLowerCase().startsWith(input)) {
-                builder.suggest(name);
-            }
+        CommandSender sender = context.getSource().getSender();
+        String othersPermission = config.getSubcommandPermission("money", "others", config.getCommandPermission("money") + ".others");
+        if (!sender.hasPermission(othersPermission)) {
+            return builder.buildFuture();
         }
-        return builder.buildFuture();
+
+        return CompletableFuture.supplyAsync(() -> {
+            String input = builder.getRemaining().toLowerCase();
+            String adminPermission = config.getSubcommandPermission("money", "admin", config.getCommandPermission("money") + ".admin");
+            boolean isAdmin = sender.hasPermission(adminPermission);
+
+            Set<String> names = new HashSet<>();
+            for (Player p : Bukkit.getOnlinePlayers()) {
+                if (isAdmin || PlayerVisibility.canSeePlayer(sender, p)) {
+                    names.add(p.getName());
+                }
+            }
+            if (isAdmin) {
+                for (OfflinePlayer op : Bukkit.getOfflinePlayers()) {
+                    if (op.getName() != null) {
+                        names.add(op.getName());
+                    }
+                }
+            }
+
+            for (String name : names) {
+                if (name.toLowerCase().startsWith(input)) {
+                    builder.suggest(name);
+                }
+            }
+            return builder.build();
+        });
     }
 
     private int executeSelf(CommandContext<CommandSourceStack> ctx) {
@@ -204,32 +230,63 @@ public class EconomyCommand {
     }
 
     private int executeOther(CommandContext<CommandSourceStack> ctx, Currency currency) {
+        CommandSender sender = ctx.getSource().getSender();
+        String othersPermission = config.getSubcommandPermission("money", "others", config.getCommandPermission("money") + ".others");
+        if (!sender.hasPermission(othersPermission)) {
+            return executeSelf(ctx, currency);
+        }
+
         CompletableFuture.runAsync(() -> {
             try {
                 String targetName = StringArgumentType.getString(ctx, "player");
-                OfflinePlayer target = Bukkit.getPlayer(targetName);
-                if (target == null) {
-                    target = Bukkit.getOfflinePlayer(targetName);
-                    if (!target.hasPlayedBefore()) {
-                        Bukkit.getGlobalRegionScheduler().run(plugin, task -> 
-                            ctx.getSource().getSender().sendMessage(config.getMessage("player_not_found"))
+                String adminPermission = config.getSubcommandPermission("money", "admin", config.getCommandPermission("money") + ".admin");
+                boolean isAdmin = sender.hasPermission(adminPermission);
+
+                OfflinePlayer target = null;
+                if (!isAdmin) {
+                    Player onlineTarget = Bukkit.getPlayerExact(targetName);
+                    if (onlineTarget == null) {
+                        onlineTarget = Bukkit.getPlayer(targetName);
+                    }
+                    if (onlineTarget == null || !PlayerVisibility.canSeePlayer(sender, onlineTarget)) {
+                        Bukkit.getGlobalRegionScheduler().run(plugin, task ->
+                                sender.sendMessage(config.getMessage("player_not_found"))
                         );
                         return;
                     }
+                    target = onlineTarget;
+                } else {
+                    Player onlineTarget = Bukkit.getPlayerExact(targetName);
+                    if (onlineTarget == null) {
+                        onlineTarget = Bukkit.getPlayer(targetName);
+                    }
+                    if (onlineTarget != null) {
+                        target = onlineTarget;
+                    } else {
+                        OfflinePlayer offlineTarget = Bukkit.getOfflinePlayer(targetName);
+                        if (!offlineTarget.hasPlayedBefore() && !offlineTarget.isOnline()) {
+                            Bukkit.getGlobalRegionScheduler().run(plugin, task ->
+                                    sender.sendMessage(config.getMessage("player_not_found"))
+                            );
+                            return;
+                        }
+                        target = offlineTarget;
+                    }
                 }
+
                 final OfflinePlayer finalTarget = target;
                 final String finalTargetName = target.getName() != null ? target.getName() : targetName;
                 accountManager.getAccount(finalTarget.getUniqueId()).thenAccept(account -> {
                     BigDecimal bal = account.getBalance(currency);
-                    Bukkit.getGlobalRegionScheduler().run(plugin, task -> 
-                        ctx.getSource().getSender().sendMessage(config.getMessage("balance_other", 
-                                "player", finalTargetName,
-                                "amount", currency.format(bal)))
+                    Bukkit.getGlobalRegionScheduler().run(plugin, task ->
+                            sender.sendMessage(config.getMessage("balance_other",
+                                    "player", finalTargetName,
+                                    "amount", currency.format(bal)))
                     );
                 });
             } catch (Exception e) {
-                Bukkit.getGlobalRegionScheduler().run(plugin, task -> 
-                    ctx.getSource().getSender().sendMessage(config.getMessage("player_not_found"))
+                Bukkit.getGlobalRegionScheduler().run(plugin, task ->
+                        sender.sendMessage(config.getMessage("player_not_found"))
                 );
             }
         });

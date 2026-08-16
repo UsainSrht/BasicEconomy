@@ -11,6 +11,7 @@ import io.papermc.paper.command.brigadier.Commands;
 import me.usainsrht.basiceconomy.api.Currency;
 import me.usainsrht.basiceconomy.impl.account.AccountManagerImpl;
 import me.usainsrht.basiceconomy.impl.config.ConfigManager;
+import me.usainsrht.basiceconomy.impl.util.PlayerVisibility;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.command.CommandSender;
@@ -85,14 +86,24 @@ public class BaltopCommand {
     }
 
     private CompletableFuture<Suggestions> suggestPlayers(CommandContext<CommandSourceStack> context, SuggestionsBuilder builder) {
-        String input = builder.getRemaining().toLowerCase();
-        for (Player player : Bukkit.getOnlinePlayers()) {
-            String name = player.getName();
-            if (name.toLowerCase().startsWith(input)) {
-                builder.suggest(name);
+        CommandSender sender = context.getSource().getSender();
+        return CompletableFuture.supplyAsync(() -> {
+            String input = builder.getRemaining().toLowerCase();
+            for (Player player : Bukkit.getOnlinePlayers()) {
+                if (PlayerVisibility.canSeePlayer(sender, player)) {
+                    String name = player.getName();
+                    if (name.toLowerCase().startsWith(input)) {
+                        builder.suggest(name);
+                    }
+                }
             }
-        }
-        return builder.buildFuture();
+            for (OfflinePlayer op : Bukkit.getOfflinePlayers()) {
+                if (op.getName() != null && op.getName().toLowerCase().startsWith(input)) {
+                    builder.suggest(op.getName());
+                }
+            }
+            return builder.build();
+        });
     }
 
     private int execute(CommandContext<CommandSourceStack> ctx, String currName) {
