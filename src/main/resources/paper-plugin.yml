@@ -16,5 +16,13 @@ dependencies:
       load: BEFORE
       required: false
       join-classpath: true
+    MiniPlaceholders:
+      load: BEFORE
+      required: false
+      join-classpath: true
+    SCChat:
+      load: OMIT
+      required: false
+      join-classpath: true
 
 loader: me.usainsrht.basiceconomy.impl.loader.BasicEconomyLoader

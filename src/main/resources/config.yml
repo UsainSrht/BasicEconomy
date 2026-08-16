@@ -119,6 +119,10 @@ currencies:
     min_value: 0.0
     start_value: 0.0
 
+# Player Display Formatting
+# Uses MiniMessage syntax and supports MiniPlaceholders audience placeholders (e.g. <scchatuser_displayname>)
+player-format: "<scchatuser_displayname>"
+
 # Messages
 messages:
   prefix: "<gray>[<gold>BasicEconomy</gold>] </gray>"

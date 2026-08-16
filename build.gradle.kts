@@ -7,6 +7,7 @@ group = "me.usainsrht.basiceconomy"
 version = "1.0-SNAPSHOT"
 
 repositories {
+    mavenLocal()
     mavenCentral()
     maven("https://repo.papermc.io/repository/maven-public/")
     maven("https://jitpack.io")
@@ -19,6 +20,8 @@ dependencies {
     compileOnly("com.github.MilkBowl:VaultAPI:1.7")
     compileOnly("net.milkbowl.vault:VaultUnlockedAPI:2.20")
     compileOnly("me.clip:placeholderapi:2.11.5")
+    compileOnly("io.github.miniplaceholders:miniplaceholders-api:3.0.1")
+    compileOnly("me.usainsrht:SCChat:1.5.3")
     compileOnly("org.mongodb:mongodb-driver-sync:5.0.0")
     
     // bStats
@@ -38,6 +41,15 @@ java {
 }
 
 tasks {
+    processResources {
+        val props = mapOf("version" to version, "project" to mapOf("version" to version))
+        inputs.properties(props)
+        filteringCharset = "UTF-8"
+        filesMatching(listOf("paper-plugin.yml", "plugin.yml")) {
+            expand(props)
+        }
+    }
+
     shadowJar {
         relocate("org.bstats", "me.usainsrht.basiceconomy.lib.bstats")
     }

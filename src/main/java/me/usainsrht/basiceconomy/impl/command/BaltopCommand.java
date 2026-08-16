@@ -28,10 +28,13 @@ public class BaltopCommand {
     private final AccountManagerImpl accountManager;
     private final ConfigManager config;
 
-    public BaltopCommand(JavaPlugin plugin, AccountManagerImpl accountManager, ConfigManager config) {
+    private final me.usainsrht.basiceconomy.impl.util.PlayerFormatter playerFormatter;
+
+    public BaltopCommand(JavaPlugin plugin, AccountManagerImpl accountManager, ConfigManager config, me.usainsrht.basiceconomy.impl.util.PlayerFormatter playerFormatter) {
         this.plugin = plugin;
         this.accountManager = accountManager;
         this.config = config;
+        this.playerFormatter = playerFormatter;
     }
 
     public LiteralArgumentBuilder<CommandSourceStack> build(String name) {
@@ -111,31 +114,43 @@ public class BaltopCommand {
         Currency currency = currName != null ? accountManager.getCurrency(currName) : accountManager.getDefaultCurrency();
 
         if (currency == null) {
-            sender.sendMessage(config.getMessage("currency_not_found"));
+            sender.sendMessage(config.getMessage(sender, "currency_not_found"));
             return 0;
         }
 
         if (!currency.baltopEnabled()) {
-            sender.sendMessage(config.getMessage("baltop_disabled"));
+            sender.sendMessage(config.getMessage(sender, "baltop_disabled"));
             return 0;
         }
 
-        sender.sendMessage(config.getMessage("baltop_header", "currency", currency.name()));
+        sender.sendMessage(config.getMessage(sender, "baltop_header", "currency", currency.name()));
         
-        accountManager.getTopAccounts(currency, 10).thenAccept(top -> {
-            Bukkit.getGlobalRegionScheduler().run(plugin, task -> {
-                int pos = 1;
-                for (var entry : top) {
-                    OfflinePlayer op = Bukkit.getOfflinePlayer(entry.getKey());
-                    String pName = op.getName() != null ? op.getName() : "Unknown";
-                    sender.sendMessage(config.getMessage("baltop_entry", 
-                            "position", String.valueOf(pos),
-                            "player", pName,
-                            "amount", currency.format(entry.getValue())));
-                    pos++;
-                }
+        List<AccountManagerImpl.BaltopEntry> cachedTop = accountManager.getCachedBaltop(currency);
+        if (cachedTop != null) {
+            int pos = 1;
+            for (AccountManagerImpl.BaltopEntry entry : cachedTop) {
+                sender.sendMessage(config.getMessage(sender, "baltop_entry",
+                        "position", String.valueOf(pos),
+                        "player", entry.getPlayerDisplay(),
+                        "amount", currency.format(entry.getBalance())));
+                pos++;
+            }
+        } else {
+            accountManager.getTopAccounts(currency, 10).thenAccept(top -> {
+                Bukkit.getGlobalRegionScheduler().run(plugin, task -> {
+                    int pos = 1;
+                    for (var entry : top) {
+                        OfflinePlayer op = Bukkit.getOfflinePlayer(entry.getKey());
+                        net.kyori.adventure.text.Component display = playerFormatter.formatPlayer(op);
+                        sender.sendMessage(config.getMessage(sender, "baltop_entry", 
+                                "position", String.valueOf(pos),
+                                "player", display,
+                                "amount", currency.format(entry.getValue())));
+                        pos++;
+                    }
+                });
             });
-        });
+        }
 
         return Command.SINGLE_SUCCESS;
     }

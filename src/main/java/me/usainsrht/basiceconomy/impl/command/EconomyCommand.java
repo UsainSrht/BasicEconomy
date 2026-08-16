@@ -36,10 +36,13 @@ public class EconomyCommand {
     private final AccountManagerImpl accountManager;
     private final ConfigManager config;
 
-    public EconomyCommand(BasicEconomyPlugin plugin, AccountManagerImpl accountManager, ConfigManager config) {
+    private final me.usainsrht.basiceconomy.impl.util.PlayerFormatter playerFormatter;
+
+    public EconomyCommand(BasicEconomyPlugin plugin, AccountManagerImpl accountManager, ConfigManager config, me.usainsrht.basiceconomy.impl.util.PlayerFormatter playerFormatter) {
         this.plugin = plugin;
         this.accountManager = accountManager;
         this.config = config;
+        this.playerFormatter = playerFormatter;
     }
 
     public LiteralArgumentBuilder<CommandSourceStack> build(String name) {
@@ -202,14 +205,15 @@ public class EconomyCommand {
     }
 
     private int executeSelf(CommandContext<CommandSourceStack> ctx, Currency currency) {
-        if (!(ctx.getSource().getSender() instanceof Player player)) {
-            ctx.getSource().getSender().sendMessage(config.getMessage("player_only"));
+        CommandSender sender = ctx.getSource().getSender();
+        if (!(sender instanceof Player player)) {
+            sender.sendMessage(config.getMessage(sender, "player_only"));
             return 0;
         }
         accountManager.getAccount(player.getUniqueId()).thenAccept(account -> {
             BigDecimal bal = account.getBalance(currency);
             Bukkit.getGlobalRegionScheduler().run(plugin, task -> 
-                player.sendMessage(config.getMessage("balance_self", "amount", currency.format(bal)))
+                player.sendMessage(config.getMessage(player, "balance_self", "amount", currency.format(bal)))
             );
         });
         return Command.SINGLE_SUCCESS;
@@ -223,7 +227,7 @@ public class EconomyCommand {
         String currName = StringArgumentType.getString(ctx, "currency");
         Currency currency = accountManager.getCurrency(currName);
         if (currency == null) {
-            ctx.getSource().getSender().sendMessage(config.getMessage("currency_not_found"));
+            ctx.getSource().getSender().sendMessage(config.getMessage(ctx.getSource().getSender(), "currency_not_found"));
             return 0;
         }
         return executeOther(ctx, currency);
@@ -250,7 +254,7 @@ public class EconomyCommand {
                     }
                     if (onlineTarget == null || !PlayerVisibility.canSeePlayer(sender, onlineTarget)) {
                         Bukkit.getGlobalRegionScheduler().run(plugin, task ->
-                                sender.sendMessage(config.getMessage("player_not_found"))
+                                sender.sendMessage(config.getMessage(sender, "player_not_found"))
                         );
                         return;
                     }
@@ -266,7 +270,7 @@ public class EconomyCommand {
                         OfflinePlayer offlineTarget = Bukkit.getOfflinePlayer(targetName);
                         if (!offlineTarget.hasPlayedBefore() && !offlineTarget.isOnline()) {
                             Bukkit.getGlobalRegionScheduler().run(plugin, task ->
-                                    sender.sendMessage(config.getMessage("player_not_found"))
+                                    sender.sendMessage(config.getMessage(sender, "player_not_found"))
                             );
                             return;
                         }
@@ -275,18 +279,18 @@ public class EconomyCommand {
                 }
 
                 final OfflinePlayer finalTarget = target;
-                final String finalTargetName = target.getName() != null ? target.getName() : targetName;
+                net.kyori.adventure.text.Component targetDisplay = playerFormatter.formatPlayer(finalTarget);
                 accountManager.getAccount(finalTarget.getUniqueId()).thenAccept(account -> {
                     BigDecimal bal = account.getBalance(currency);
                     Bukkit.getGlobalRegionScheduler().run(plugin, task ->
-                            sender.sendMessage(config.getMessage("balance_other",
-                                    "player", finalTargetName,
+                            sender.sendMessage(config.getMessage(sender, "balance_other",
+                                    "player", targetDisplay,
                                     "amount", currency.format(bal)))
                     );
                 });
             } catch (Exception e) {
                 Bukkit.getGlobalRegionScheduler().run(plugin, task ->
-                        sender.sendMessage(config.getMessage("player_not_found"))
+                        sender.sendMessage(config.getMessage(sender, "player_not_found"))
                 );
             }
         });
@@ -294,9 +298,10 @@ public class EconomyCommand {
     }
 
     private int executeAdmin(CommandContext<CommandSourceStack> ctx, String action, String currName) {
+        CommandSender sender = ctx.getSource().getSender();
         Currency currency = currName != null ? accountManager.getCurrency(currName) : accountManager.getDefaultCurrency();
         if (currency == null) {
-            ctx.getSource().getSender().sendMessage(config.getMessage("currency_not_found"));
+            sender.sendMessage(config.getMessage(sender, "currency_not_found"));
             return 0;
         }
         
@@ -308,13 +313,13 @@ public class EconomyCommand {
                     target = Bukkit.getOfflinePlayer(targetName);
                     if (!target.hasPlayedBefore()) {
                         Bukkit.getGlobalRegionScheduler().run(plugin, task -> 
-                            ctx.getSource().getSender().sendMessage(config.getMessage("player_not_found"))
+                            sender.sendMessage(config.getMessage(sender, "player_not_found"))
                         );
                         return;
                     }
                 }
                 final OfflinePlayer finalTarget = target;
-                final String finalTargetName = target.getName() != null ? target.getName() : targetName;
+                net.kyori.adventure.text.Component targetDisplay = playerFormatter.formatPlayer(finalTarget);
                 double amount = DoubleArgumentType.getDouble(ctx, "amount");
                 BigDecimal bdAmount = BigDecimal.valueOf(amount);
                 
@@ -335,18 +340,18 @@ public class EconomyCommand {
                     future.thenAccept(success -> {
                         Bukkit.getGlobalRegionScheduler().run(plugin, task -> {
                             if (success) {
-                                ctx.getSource().getSender().sendMessage(config.getMessage(msgKey, 
-                                        "player", finalTargetName,
+                                sender.sendMessage(config.getMessage(sender, msgKey, 
+                                        "player", targetDisplay,
                                         "amount", currency.format(bdAmount)));
                             } else {
-                                ctx.getSource().getSender().sendMessage(config.getMessage("invalid_amount"));
+                                sender.sendMessage(config.getMessage(sender, "invalid_amount"));
                             }
                         });
                     });
                 });
             } catch (Exception e) {
                 Bukkit.getGlobalRegionScheduler().run(plugin, task -> 
-                    ctx.getSource().getSender().sendMessage(config.getMessage("player_not_found"))
+                    sender.sendMessage(config.getMessage(sender, "player_not_found"))
                 );
             }
         });
@@ -355,16 +360,17 @@ public class EconomyCommand {
 
     private int executeReload(CommandContext<CommandSourceStack> ctx) {
         plugin.reload();
-        ctx.getSource().getSender().sendMessage(config.getMessage("reloaded"));
+        ctx.getSource().getSender().sendMessage(config.getMessage(ctx.getSource().getSender(), "reloaded"));
         return Command.SINGLE_SUCCESS;
     }
 
     private int executeHelp(CommandContext<CommandSourceStack> ctx) {
-        ctx.getSource().getSender().sendMessage(config.getMessage("money_help"));
+        ctx.getSource().getSender().sendMessage(config.getMessage(ctx.getSource().getSender(), "money_help"));
         return Command.SINGLE_SUCCESS;
     }
 
     private int executeInfo(CommandContext<CommandSourceStack> ctx) {
+        CommandSender sender = ctx.getSource().getSender();
         org.bukkit.plugin.Plugin vault = Bukkit.getPluginManager().getPlugin("Vault");
         String vaultHook = (vault != null && vault.isEnabled()) ? vault.getDescription().getVersion() : "Disabled";
 
@@ -382,13 +388,21 @@ public class EconomyCommand {
         org.bukkit.plugin.Plugin papi = Bukkit.getPluginManager().getPlugin("PlaceholderAPI");
         String papiHook = (papi != null && papi.isEnabled()) ? papi.getDescription().getVersion() : "Disabled";
 
-        ctx.getSource().getSender().sendMessage(config.getMessage("money_info",
+        org.bukkit.plugin.Plugin miniPlaceholders = Bukkit.getPluginManager().getPlugin("MiniPlaceholders");
+        String miniPlaceholdersHook = (miniPlaceholders != null && miniPlaceholders.isEnabled()) ? miniPlaceholders.getDescription().getVersion() : "Disabled";
+
+        org.bukkit.plugin.Plugin scchat = Bukkit.getPluginManager().getPlugin("SCChat");
+        String scchatHook = (scchat != null && scchat.isEnabled()) ? scchat.getDescription().getVersion() : "Disabled";
+
+        sender.sendMessage(config.getMessage(sender, "money_info",
                 "server_version", Bukkit.getBukkitVersion(),
                 "platform", Bukkit.getName(),
                 "db_type", config.getStorageType(),
                 "vault_hook", vaultHook,
                 "vault2_hook", vault2Hook,
-                "papi_hook", papiHook
+                "papi_hook", papiHook,
+                "miniplaceholders_hook", miniPlaceholdersHook,
+                "scchat_hook", scchatHook
         ));
         return Command.SINGLE_SUCCESS;
     }

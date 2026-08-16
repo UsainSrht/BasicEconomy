@@ -17,10 +17,13 @@ public class CommandRegistry {
     private final AccountManagerImpl accountManager;
     private final ConfigManager config;
 
-    public CommandRegistry(BasicEconomyPlugin plugin, AccountManagerImpl accountManager, ConfigManager config) {
+    private final me.usainsrht.basiceconomy.impl.util.PlayerFormatter playerFormatter;
+
+    public CommandRegistry(BasicEconomyPlugin plugin, AccountManagerImpl accountManager, ConfigManager config, me.usainsrht.basiceconomy.impl.util.PlayerFormatter playerFormatter) {
         this.plugin = plugin;
         this.accountManager = accountManager;
         this.config = config;
+        this.playerFormatter = playerFormatter;
     }
 
     public void register() {
@@ -29,7 +32,7 @@ public class CommandRegistry {
         manager.registerEventHandler(LifecycleEvents.COMMANDS, event -> {
             Commands commands = event.registrar();
 
-            EconomyCommand moneyCmd = new EconomyCommand(plugin, accountManager, config);
+            EconomyCommand moneyCmd = new EconomyCommand(plugin, accountManager, config, playerFormatter);
             String moneyName = config.getCommandName("money");
             commands.register(moneyCmd.build(moneyName).build(), "BasicEconomy main command", List.of());
             List<String> moneyAliases = config.getCommandAliases("money");
@@ -37,7 +40,7 @@ public class CommandRegistry {
                 commands.register(moneyCmd.build(alias).build(), "BasicEconomy main command", List.of());
             }
 
-            PayCommand payCmd = new PayCommand(plugin, accountManager, config);
+            PayCommand payCmd = new PayCommand(plugin, accountManager, config, playerFormatter);
             String payName = config.getCommandName("pay");
             commands.register(payCmd.build(payName).build(), "BasicEconomy pay command", List.of());
             List<String> payAliases = config.getCommandAliases("pay");
@@ -45,7 +48,7 @@ public class CommandRegistry {
                 commands.register(payCmd.build(alias).build(), "BasicEconomy pay command", List.of());
             }
 
-            BaltopCommand baltopCmd = new BaltopCommand(plugin, accountManager, config);
+            BaltopCommand baltopCmd = new BaltopCommand(plugin, accountManager, config, playerFormatter);
             String baltopName = config.getCommandName("baltop");
             commands.register(baltopCmd.build(baltopName).build(), "BasicEconomy baltop command", List.of());
             List<String> baltopAliases = config.getCommandAliases("baltop");

@@ -26,9 +26,25 @@ public class AccountManagerImpl implements EconomyManager {
     
     private final Map<UUID, AccountImpl> loadedAccounts = new ConcurrentHashMap<>();
     private final Map<UUID, CompletableFuture<AccountImpl>> loadingAccounts = new ConcurrentHashMap<>();
-    private final Map<Currency, List<Map.Entry<UUID, BigDecimal>>> baltopCache = new ConcurrentHashMap<>();
-    
-    // Cache for offline players to prevent database spam
+    public static class BaltopEntry {
+        private final UUID uuid;
+        private final BigDecimal balance;
+        private final net.kyori.adventure.text.Component playerDisplay;
+        private final String rawName;
+
+        public BaltopEntry(UUID uuid, BigDecimal balance, net.kyori.adventure.text.Component playerDisplay, String rawName) {
+            this.uuid = uuid;
+            this.balance = balance;
+            this.playerDisplay = playerDisplay;
+            this.rawName = rawName;
+        }
+
+        public UUID getUuid() { return uuid; }
+        public BigDecimal getBalance() { return balance; }
+        public net.kyori.adventure.text.Component getPlayerDisplay() { return playerDisplay; }
+        public String getRawName() { return rawName; }
+    }
+
     private static class OfflineCacheEntry {
         final AccountImpl account;
         final long loadTime;
@@ -42,15 +58,19 @@ public class AccountManagerImpl implements EconomyManager {
             return System.currentTimeMillis() - loadTime > 5000; // 5 seconds TTL
         }
     }
-    
+
     private final Map<UUID, OfflineCacheEntry> offlineCache = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<UUID, Object> loadLocks = new ConcurrentHashMap<>();
     private volatile SyncProvider syncProvider;
 
-    public AccountManagerImpl(BasicEconomyPlugin plugin, ConfigManager config, Storage storage) {
+    private final me.usainsrht.basiceconomy.impl.util.PlayerFormatter playerFormatter;
+    private final Map<Currency, List<BaltopEntry>> baltopCache = new ConcurrentHashMap<>();
+
+    public AccountManagerImpl(BasicEconomyPlugin plugin, ConfigManager config, Storage storage, me.usainsrht.basiceconomy.impl.util.PlayerFormatter playerFormatter) {
         this.plugin = plugin;
         this.config = config;
         this.storage = storage;
+        this.playerFormatter = playerFormatter;
         startTasks();
         initSync();
         repairOnStartup();
@@ -70,13 +90,26 @@ public class AccountManagerImpl implements EconomyManager {
 
     private void updateBaltopCache() {
         int fetchLimit = 100 + config.getBaltopHiddenPlayers().size();
+        Set<UUID> hidden = config.getBaltopHiddenPlayers();
         for (Currency currency : config.getCurrencies().values()) {
             if (currency.baltopEnabled()) {
                 storage.getTopBalances(currency, fetchLimit).thenAccept(top -> {
-                    baltopCache.put(currency, top);
+                    List<BaltopEntry> entries = new ArrayList<>();
+                    for (Map.Entry<UUID, BigDecimal> entry : top) {
+                        if (hidden.contains(entry.getKey())) continue;
+                        org.bukkit.OfflinePlayer op = Bukkit.getOfflinePlayer(entry.getKey());
+                        net.kyori.adventure.text.Component display = playerFormatter.formatPlayer(op);
+                        String rawName = op.getName() != null ? op.getName() : "Unknown";
+                        entries.add(new BaltopEntry(entry.getKey(), entry.getValue(), display, rawName));
+                    }
+                    baltopCache.put(currency, entries);
                 });
             }
         }
+    }
+
+    public List<BaltopEntry> getCachedBaltop(Currency currency) {
+        return baltopCache.get(currency);
     }
 
     private void cleanupCache() {
@@ -280,20 +313,21 @@ public class AccountManagerImpl implements EconomyManager {
 
     @Override
     public CompletableFuture<List<Map.Entry<UUID, BigDecimal>>> getTopAccounts(Currency currency, int limit) {
-        List<Map.Entry<UUID, BigDecimal>> cached = baltopCache.get(currency);
+        List<BaltopEntry> cached = baltopCache.get(currency);
         if (cached != null) {
-            return CompletableFuture.completedFuture(filterBaltop(cached, limit));
+            List<Map.Entry<UUID, BigDecimal>> result = cached.stream()
+                    .limit(limit)
+                    .map(e -> Map.entry(e.getUuid(), e.getBalance()))
+                    .collect(Collectors.toList());
+            return CompletableFuture.completedFuture(result);
         }
         int fetchLimit = Math.max(limit + config.getBaltopHiddenPlayers().size(), 100);
-        return storage.getTopBalances(currency, fetchLimit).thenApply(top -> filterBaltop(top, limit));
-    }
-
-    private List<Map.Entry<UUID, BigDecimal>> filterBaltop(List<Map.Entry<UUID, BigDecimal>> top, int limit) {
-        Set<UUID> hidden = config.getBaltopHiddenPlayers();
-        return top.stream()
-                .filter(entry -> !hidden.contains(entry.getKey()))
-                .limit(limit)
-                .collect(Collectors.toList());
+        return storage.getTopBalances(currency, fetchLimit).thenApply(top ->
+                top.stream()
+                        .filter(e -> !config.getBaltopHiddenPlayers().contains(e.getKey()))
+                        .limit(limit)
+                        .collect(Collectors.toList())
+        );
     }
 
     public CompletableFuture<Void> saveBalance(UUID uuid, Currency currency, BigDecimal amount) {

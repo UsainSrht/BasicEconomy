@@ -23,6 +23,8 @@ public class ConfigManager {
     private final Set<UUID> baltopHiddenPlayers = ConcurrentHashMap.newKeySet();
     private String defaultCurrencyName = null;
 
+    private final Map<String, String> rawMessages = new ConcurrentHashMap<>();
+
     public ConfigManager(FileConfiguration config) {
         this.config = config;
         load();
@@ -32,9 +34,14 @@ public class ConfigManager {
         this.config = config;
     }
 
+    public String getPlayerFormat() {
+        return config.getString("player-format", "<scchatuser_displayname>");
+    }
+
     public void load() {
         currencies.clear();
         messages.clear();
+        rawMessages.clear();
         baltopHiddenPlayers.clear();
         defaultCurrencyName = null;
 
@@ -50,7 +57,8 @@ public class ConfigManager {
         if (currencySection != null) {
             for (String key : currencySection.getKeys(false)) {
                 ConfigurationSection sec = currencySection.getConfigurationSection(key);
-                if (sec == null) continue;
+                if (sec == null)
+                    continue;
 
                 String name = sec.getString("name", key);
                 Component displayName = parse(sec.getString("displayname", name));
@@ -62,19 +70,16 @@ public class ConfigManager {
                 boolean baltopEnabled = sec.getBoolean("baltop_enabled", true);
                 BigDecimal min = BigDecimal.valueOf(sec.getDouble("min_value", 0.0));
                 BigDecimal start = BigDecimal.valueOf(sec.getDouble("start_value", 0.0));
-                // For limits we just use Double.MAX_VALUE effectively, but BigDecimal can go higher.
-                // Sticking to large limits.
                 BigDecimal max = BigDecimal.valueOf(Double.MAX_VALUE);
 
                 Currency currency = new Currency(
                         name, displayName, displayNamePlural, symbol, defaultFormat,
-                        compactFormatting, payEnabled, baltopEnabled, min, max, start
-                );
-                
+                        compactFormatting, payEnabled, baltopEnabled, min, max, start);
+
                 if (firstLoadedCurrency == null) {
                     firstLoadedCurrency = name;
                 }
-                
+
                 currencies.put(name.toLowerCase(), currency);
             }
         }
@@ -89,13 +94,30 @@ public class ConfigManager {
         ConfigurationSection messagesSection = config.getConfigurationSection("messages");
         if (messagesSection != null) {
             for (String key : messagesSection.getKeys(false)) {
-                messages.put(key, parse(messagesSection.getString(key, "")));
+                String raw = messagesSection.getString(key, "");
+                rawMessages.put(key, raw);
+                messages.put(key, parse(raw));
             }
         }
     }
 
-    private Component parse(String text) {
-        return MiniMessage.miniMessage().deserialize(text);
+    public Component parse(String text) {
+        return parse(text, (net.kyori.adventure.audience.Audience) null);
+    }
+
+    public Component parse(String text, net.kyori.adventure.audience.Audience audience) {
+        net.kyori.adventure.text.minimessage.tag.resolver.TagResolver.Builder builder = net.kyori.adventure.text.minimessage.tag.resolver.TagResolver
+                .builder();
+        if (me.usainsrht.basiceconomy.impl.integration.MiniPlaceholdersHook.isAvailable()) {
+            if (audience != null) {
+                builder.resolver(me.usainsrht.basiceconomy.impl.integration.MiniPlaceholdersHook
+                        .getAudienceGlobalPlaceholders());
+            } else {
+                builder.resolver(
+                        me.usainsrht.basiceconomy.impl.integration.MiniPlaceholdersHook.getGlobalPlaceholders());
+            }
+        }
+        return MiniMessage.miniMessage().deserialize(text, builder.build());
     }
 
     public Map<String, Currency> getCurrencies() {
@@ -105,27 +127,59 @@ public class ConfigManager {
     public Currency getDefaultCurrency() {
         return defaultCurrencyName != null ? currencies.get(defaultCurrencyName.toLowerCase()) : null;
     }
-    
-    public Component getMessage(String key, String... placeholders) {
-        Component message = messages.getOrDefault(key, Component.text(key));
-        Component prefix = messages.getOrDefault("prefix", Component.empty());
-        
-        if (key.equals("prefix")) {
-            return prefix; // Don't prefix the prefix
+
+    public Component getMessage(String key, Object... placeholders) {
+        return getMessage((net.kyori.adventure.audience.Audience) null, key, placeholders);
+    }
+
+    public Component getMessage(net.kyori.adventure.audience.Audience audience, String key, Object... placeholders) {
+        String rawMsg = rawMessages.get(key);
+        if (rawMsg == null) {
+            return Component.text(key);
         }
-        
-        boolean showPrefix = !key.equals("money_help") && !key.equals("money_info");
-        Component result = showPrefix ? prefix.append(message) : message;
-        
-        for (int i = 0; i < placeholders.length; i += 2) {
-            if (i + 1 < placeholders.length) {
-                String pKey = placeholders[i];
-                String pVal = placeholders[i + 1];
-                result = result.replaceText(builder -> builder.matchLiteral("<" + pKey + ">").replacement(pVal));
+
+        String rawPrefix = rawMessages.getOrDefault("prefix", "");
+        boolean showPrefix = !key.equals("prefix") && !key.equals("money_help") && !key.equals("money_info");
+
+        net.kyori.adventure.text.minimessage.tag.resolver.TagResolver.Builder builder = net.kyori.adventure.text.minimessage.tag.resolver.TagResolver
+                .builder();
+
+        if (me.usainsrht.basiceconomy.impl.integration.MiniPlaceholdersHook.isAvailable()) {
+            if (audience != null) {
+                builder.resolver(me.usainsrht.basiceconomy.impl.integration.MiniPlaceholdersHook
+                        .getAudienceGlobalPlaceholders());
+            } else {
+                builder.resolver(
+                        me.usainsrht.basiceconomy.impl.integration.MiniPlaceholdersHook.getGlobalPlaceholders());
             }
         }
-        
-        return result;
+
+        for (int i = 0; i < placeholders.length; i += 2) {
+            if (i + 1 < placeholders.length) {
+                String pKey = String.valueOf(placeholders[i]);
+                Object pVal = placeholders[i + 1];
+                if (pVal instanceof Component cVal) {
+                    builder.resolver(
+                            net.kyori.adventure.text.minimessage.tag.resolver.Placeholder.component(pKey, cVal));
+                } else if (pVal != null) {
+                    builder.resolver(net.kyori.adventure.text.minimessage.tag.resolver.Placeholder.parsed(pKey,
+                            String.valueOf(pVal)));
+                }
+            }
+        }
+
+        net.kyori.adventure.text.minimessage.tag.resolver.TagResolver resolver = builder.build();
+        Component msgComp = MiniMessage.miniMessage().deserialize(rawMsg, resolver);
+
+        if (!showPrefix) {
+            return msgComp;
+        }
+
+        Component prefixComp = rawPrefix.isEmpty()
+                ? Component.empty()
+                : MiniMessage.miniMessage().deserialize(rawPrefix, resolver);
+
+        return prefixComp.append(msgComp);
     }
 
     public String getCommandName(String command) {
@@ -139,7 +193,7 @@ public class ConfigManager {
     public String getCommandPermission(String command) {
         return config.getString("commands." + command + ".permission", "basiceconomy.command." + command);
     }
-    
+
     public String getSubcommandName(String parent, String subKey) {
         return config.getString("commands." + parent + ".subcommands." + subKey + ".name", subKey);
     }
@@ -151,35 +205,35 @@ public class ConfigManager {
     public String getSubcommandPermission(String parent, String subKey, String defaultPerm) {
         return config.getString("commands." + parent + ".subcommands." + subKey + ".permission", defaultPerm);
     }
-    
+
     public String getStorageType() {
         return config.getString("storage.type", "H2").toUpperCase();
     }
-    
+
     public String getStorageAddress() {
         return config.getString("storage.address", "localhost");
     }
-    
+
     public int getStoragePort() {
         return config.getInt("storage.port", 3306);
     }
-    
+
     public String getStorageDatabase() {
         return config.getString("storage.database", "basiceconomy");
     }
-    
+
     public String getStorageUsername() {
         return config.getString("storage.username", "root");
     }
-    
+
     public String getStoragePassword() {
         return config.getString("storage.password", "");
     }
-    
+
     public String getStorageH2File() {
         return config.getString("storage.h2-file", "database");
     }
-    
+
     public String getStorageMongoUri() {
         return config.getString("storage.mongodb-uri", "mongodb://localhost:27017");
     }

@@ -23,14 +23,17 @@ public class BasicEconomyPlugin extends JavaPlugin implements Listener {
 
     private ConfigManager configManager;
     private Storage storage;
+    private me.usainsrht.basiceconomy.impl.util.PlayerFormatter playerFormatter;
     private AccountManagerImpl accountManager;
     private VaultEconomyImpl vaultEconomy;
+    private me.usainsrht.basiceconomy.impl.integration.MiniPlaceholdersExpansion miniPlaceholdersExpansion;
 
     @Override
     public void onEnable() {
         saveDefaultConfig();
 
         configManager = new ConfigManager(getConfig());
+        playerFormatter = new me.usainsrht.basiceconomy.impl.util.PlayerFormatter(configManager);
 
         try {
             if (configManager.getStorageType().equals("MONGODB")) {
@@ -46,7 +49,7 @@ public class BasicEconomyPlugin extends JavaPlugin implements Listener {
             return;
         }
 
-        accountManager = new AccountManagerImpl(this, configManager, storage);
+        accountManager = new AccountManagerImpl(this, configManager, storage, playerFormatter);
         BasicEconomyAPI.setEconomyManager(accountManager);
 
         // Register events
@@ -73,8 +76,12 @@ public class BasicEconomyPlugin extends JavaPlugin implements Listener {
             getLogger().info("Hooked into PlaceholderAPI!");
         }
 
+        // MiniPlaceholders hook
+        miniPlaceholdersExpansion = new me.usainsrht.basiceconomy.impl.integration.MiniPlaceholdersExpansion(this, accountManager, configManager);
+        miniPlaceholdersExpansion.register();
+
         // Commands
-        CommandRegistry registry = new CommandRegistry(this, accountManager, configManager);
+        CommandRegistry registry = new CommandRegistry(this, accountManager, configManager, playerFormatter);
         registry.register();
 
         // bStats
@@ -86,6 +93,9 @@ public class BasicEconomyPlugin extends JavaPlugin implements Listener {
 
     @Override
     public void onDisable() {
+        if (miniPlaceholdersExpansion != null) {
+            miniPlaceholdersExpansion.unregister();
+        }
         if (accountManager != null) {
             accountManager.shutdownSync();
         }
