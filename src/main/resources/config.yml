@@ -33,6 +33,15 @@ tasks:
   # How often (in seconds) should offline caches be cleared?
   cache-cleanup-interval: 600
 
+# Baltop Settings
+baltop:
+  # Maximum number of top accounts cached in memory from database
+  cache-limit: 100
+  # Number of top entries displayed in /baltop command by default
+  display-top: 10
+  # Display text when player position is beyond cache-limit (e.g. 100+)
+  out-of-range-position: "100+"
+
 # Players hidden from /baltop and baltop placeholders (stored as UUIDs)
 baltop-hidden-players: []
 
@@ -59,6 +68,11 @@ commands:
         name: "remove"
         aliases: []
         permission: "basiceconomy.command.money.admin"
+      send:
+        name: "send"
+        aliases:
+          - pay
+        permission: "basiceconomy.command.pay"
       reload:
         name: "reload"
         aliases: []
@@ -71,6 +85,8 @@ commands:
       others:
         name: "others"
         permission: "basiceconomy.command.money.others"
+        offline:
+          permission: "basiceconomy.command.money.others.offline"
       info:
         name: "info"
         aliases: []
@@ -79,6 +95,10 @@ commands:
     name: "pay"
     aliases: []
     permission: "basiceconomy.command.pay"
+    subcommands:
+      offline:
+        name: "offline"
+        permission: "basiceconomy.command.pay.offline"
   baltop:
     name: "baltop"
     aliases: []
@@ -147,6 +167,7 @@ messages:
   
   baltop_header: "<gold>--- Top Balances (<currency>) ---</gold>"
   baltop_entry: "<gray><position>. <player>: <yellow><amount></yellow></gray>"
+  baltop_footer: "<gray>Your position: <yellow>#<position></yellow></gray>"
   baltop_disabled: "<red>Baltop is disabled for this currency.</red>"
   baltop_hide_success: "<green>Hidden <player> from baltop.</green>"
   baltop_unhide_success: "<green>Unhidden <player> from baltop.</green>"
@@ -165,6 +186,7 @@ messages:
     <gray>/money add <player> <amount> [currency] - Add balance</gray>
     <gray>/money set <player> <amount> [currency] - Set balance</gray>
     <gray>/money remove <player> <amount> [currency] - Remove balance</gray>
+    <gray>/money send <player> <amount> [currency] - Pay player</gray>
     <gray>/pay <player> <amount> [currency] - Pay player</gray>
     <gray>/baltop [currency] - Show balance top list</gray>
     <gray>/baltop hide <player> - Hide a player from baltop</gray>

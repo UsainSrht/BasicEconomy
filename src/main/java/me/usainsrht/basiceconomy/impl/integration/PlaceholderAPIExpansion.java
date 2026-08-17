@@ -53,7 +53,7 @@ public class PlaceholderAPIExpansion extends PlaceholderExpansion {
     @Override
     public String onRequest(OfflinePlayer player, @NotNull String params) {
         String[] args = params.split("_");
-        if (args.length < 2)
+        if (args.length < 1)
             return null;
 
         if (args[0].equalsIgnoreCase("balance")) {
@@ -85,6 +85,31 @@ public class PlaceholderAPIExpansion extends PlaceholderExpansion {
                 return currency.format(currency.startValue());
             }
             return currency.format(account.getBalance(currency));
+        }
+
+        if (args[0].equalsIgnoreCase("position") || args[0].equalsIgnoreCase("rank")) {
+            // Support:
+            // %basiceconomy_position%
+            // %basiceconomy_position_<currency>%
+            // %basiceconomy_rank%
+            // %basiceconomy_rank_<currency>%
+            if (player == null)
+                return "";
+
+            Currency currency;
+            if (args.length >= 2) {
+                currency = accountManager.getCurrency(args[1]);
+                if (currency == null) {
+                    return "Invalid Currency";
+                }
+            } else {
+                currency = accountManager.getDefaultCurrency();
+                if (currency == null) {
+                    return "Invalid Currency";
+                }
+            }
+
+            return accountManager.getPlayerPosition(player.getUniqueId(), currency);
         }
 
         if (args[0].equalsIgnoreCase("baltop")) {

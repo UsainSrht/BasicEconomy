@@ -206,6 +206,14 @@ public class ConfigManager {
         return config.getString("commands." + parent + ".subcommands." + subKey + ".permission", defaultPerm);
     }
 
+    public String getOthersOfflinePermission() {
+        return config.getString("commands.money.subcommands.others.offline.permission", "basiceconomy.command.money.others.offline");
+    }
+
+    public String getPayOfflinePermission() {
+        return config.getString("commands.pay.subcommands.offline.permission", "basiceconomy.command.pay.offline");
+    }
+
     public String getStorageType() {
         return config.getString("storage.type", "H2").toUpperCase();
     }
@@ -256,6 +264,18 @@ public class ConfigManager {
 
     public String getRedisChannel() {
         return config.getString("sync.redis.channel", "basiceconomy:sync");
+    }
+
+    public int getBaltopCacheLimit() {
+        return config.getInt("baltop.cache-limit", 100);
+    }
+
+    public int getBaltopDisplayTop() {
+        return config.getInt("baltop.display-top", 10);
+    }
+
+    public String getBaltopOutOfRangePosition() {
+        return config.getString("baltop.out-of-range-position", "100+");
     }
 
     public Set<UUID> getBaltopHiddenPlayers() {

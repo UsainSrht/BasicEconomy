@@ -1,6 +1,7 @@
 package me.usainsrht.basiceconomy.impl.command;
 
 import com.mojang.brigadier.Command;
+import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
@@ -27,7 +28,6 @@ public class BaltopCommand {
     private final JavaPlugin plugin;
     private final AccountManagerImpl accountManager;
     private final ConfigManager config;
-
     private final me.usainsrht.basiceconomy.impl.util.PlayerFormatter playerFormatter;
 
     public BaltopCommand(JavaPlugin plugin, AccountManagerImpl accountManager, ConfigManager config, me.usainsrht.basiceconomy.impl.util.PlayerFormatter playerFormatter) {
@@ -41,18 +41,16 @@ public class BaltopCommand {
         LiteralArgumentBuilder<CommandSourceStack> cmd = Commands.literal(name)
                 .requires(src -> src.getSender().hasPermission(config.getCommandPermission("baltop")));
 
-        boolean singleCurrency = config.getCurrencies().size() <= 1;
-
-        cmd.executes(ctx -> execute(ctx, null));
-
-        if (!singleCurrency) {
-            cmd.then(Commands.argument("currency", StringArgumentType.word())
-                    .suggests(this::suggestCurrencies)
-                    .executes(ctx -> execute(ctx, StringArgumentType.getString(ctx, "currency"))));
-        }
+        cmd.executes(ctx -> execute(ctx, null, 1));
 
         registerPlayerSubcommand(cmd, "hide", this::executeHide);
         registerPlayerSubcommand(cmd, "unhide", this::executeUnhide);
+
+        cmd.then(Commands.argument("arg1", StringArgumentType.word())
+                .suggests(this::suggestCurrencies)
+                .executes(ctx -> executeWithOneArg(ctx, StringArgumentType.getString(ctx, "arg1")))
+                .then(Commands.argument("page", IntegerArgumentType.integer(1))
+                        .executes(ctx -> execute(ctx, StringArgumentType.getString(ctx, "arg1"), IntegerArgumentType.getInteger(ctx, "page")))));
 
         return cmd;
     }
@@ -90,8 +88,29 @@ public class BaltopCommand {
 
     private CompletableFuture<Suggestions> suggestPlayers(CommandContext<CommandSourceStack> context, SuggestionsBuilder builder) {
         CommandSender sender = context.getSource().getSender();
-        return CompletableFuture.supplyAsync(() -> {
-            String input = builder.getRemaining().toLowerCase();
+        String input = builder.getRemaining().toLowerCase();
+
+        String hidePerm = config.getSubcommandPermission("baltop", "hide", config.getCommandPermission("baltop") + ".hide");
+        if (sender.hasPermission(hidePerm)) {
+            String hideName = config.getSubcommandName("baltop", "hide");
+            if (hideName.toLowerCase().startsWith(input)) {
+                builder.suggest(hideName);
+            }
+        }
+
+        String unhidePerm = config.getSubcommandPermission("baltop", "unhide", config.getCommandPermission("baltop") + ".unhide");
+        if (sender.hasPermission(unhidePerm)) {
+            String unhideName = config.getSubcommandName("baltop", "unhide");
+            if (unhideName.toLowerCase().startsWith(input)) {
+                builder.suggest(unhideName);
+            }
+        }
+
+        boolean hasOffline = sender.hasPermission(config.getOthersOfflinePermission())
+                || sender.hasPermission(hidePerm)
+                || sender.hasPermission(unhidePerm);
+
+        if (!hasOffline) {
             for (Player player : Bukkit.getOnlinePlayers()) {
                 if (PlayerVisibility.canSeePlayer(sender, player)) {
                     String name = player.getName();
@@ -100,16 +119,42 @@ public class BaltopCommand {
                     }
                 }
             }
-            for (OfflinePlayer op : Bukkit.getOfflinePlayers()) {
-                if (op.getName() != null && op.getName().toLowerCase().startsWith(input)) {
-                    builder.suggest(op.getName());
+            return builder.buildFuture();
+        }
+
+        return CompletableFuture.supplyAsync(() -> {
+            java.util.Set<String> names = new java.util.HashSet<>();
+            for (Player player : Bukkit.getOnlinePlayers()) {
+                if (PlayerVisibility.canSeePlayer(sender, player)) {
+                    names.add(player.getName());
+                }
+            }
+            names.addAll(accountManager.getCachedOfflinePlayerNames());
+            for (String name : names) {
+                if (name.toLowerCase().startsWith(input)) {
+                    builder.suggest(name);
                 }
             }
             return builder.build();
         });
     }
 
-    private int execute(CommandContext<CommandSourceStack> ctx, String currName) {
+    private int executeWithOneArg(CommandContext<CommandSourceStack> ctx, String arg1) {
+        Currency currency = accountManager.getCurrency(arg1);
+        if (currency != null) {
+            return execute(ctx, currency.name(), 1);
+        }
+        try {
+            int page = Integer.parseInt(arg1);
+            if (page >= 1) {
+                return execute(ctx, null, page);
+            }
+        } catch (NumberFormatException ignored) {
+        }
+        return execute(ctx, arg1, 1);
+    }
+
+    private int execute(CommandContext<CommandSourceStack> ctx, String currName, int page) {
         CommandSender sender = ctx.getSource().getSender();
         Currency currency = currName != null ? accountManager.getCurrency(currName) : accountManager.getDefaultCurrency();
 
@@ -123,36 +168,58 @@ public class BaltopCommand {
             return 0;
         }
 
-        sender.sendMessage(config.getMessage(sender, "baltop_header", "currency", currency.name()));
-        
+        int displayTop = Math.max(1, config.getBaltopDisplayTop());
+
         List<AccountManagerImpl.BaltopEntry> cachedTop = accountManager.getCachedBaltop(currency);
         if (cachedTop != null) {
-            int pos = 1;
-            for (AccountManagerImpl.BaltopEntry entry : cachedTop) {
-                sender.sendMessage(config.getMessage(sender, "baltop_entry",
-                        "position", String.valueOf(pos),
-                        "player", entry.getPlayerDisplay(),
-                        "amount", currency.format(entry.getBalance())));
-                pos++;
-            }
+            sendBaltopPage(sender, currency, cachedTop, page, displayTop);
         } else {
-            accountManager.getTopAccounts(currency, 10).thenAccept(top -> {
+            int cacheLimit = config.getBaltopCacheLimit();
+            accountManager.getTopAccounts(currency, cacheLimit).thenAccept(top -> {
                 Bukkit.getGlobalRegionScheduler().run(plugin, task -> {
-                    int pos = 1;
+                    List<AccountManagerImpl.BaltopEntry> entries = new ArrayList<>();
                     for (var entry : top) {
                         OfflinePlayer op = Bukkit.getOfflinePlayer(entry.getKey());
                         net.kyori.adventure.text.Component display = playerFormatter.formatPlayer(op);
-                        sender.sendMessage(config.getMessage(sender, "baltop_entry", 
-                                "position", String.valueOf(pos),
-                                "player", display,
-                                "amount", currency.format(entry.getValue())));
-                        pos++;
+                        String rawName = op.getName() != null ? op.getName() : "Unknown";
+                        entries.add(new AccountManagerImpl.BaltopEntry(entry.getKey(), entry.getValue(), display, rawName));
                     }
+                    sendBaltopPage(sender, currency, entries, page, displayTop);
                 });
             });
         }
 
         return Command.SINGLE_SUCCESS;
+    }
+
+    private void sendBaltopPage(CommandSender sender, Currency currency, List<AccountManagerImpl.BaltopEntry> entries, int page, int displayTop) {
+        int totalItems = entries.size();
+        int totalPages = Math.max(1, (int) Math.ceil((double) totalItems / displayTop));
+        int targetPage = Math.min(Math.max(1, page), totalPages);
+
+        int startIndex = (targetPage - 1) * displayTop;
+        int endIndex = Math.min(startIndex + displayTop, totalItems);
+
+        sender.sendMessage(config.getMessage(sender, "baltop_header",
+                "currency", currency.name(),
+                "page", String.valueOf(targetPage),
+                "max_pages", String.valueOf(totalPages)));
+
+        for (int i = startIndex; i < endIndex; i++) {
+            AccountManagerImpl.BaltopEntry entry = entries.get(i);
+            int pos = i + 1;
+            sender.sendMessage(config.getMessage(sender, "baltop_entry",
+                    "position", String.valueOf(pos),
+                    "player", entry.getPlayerDisplay(),
+                    "amount", currency.format(entry.getBalance())));
+        }
+
+        if (sender instanceof Player player) {
+            String playerPos = accountManager.getPlayerPosition(player.getUniqueId(), currency);
+            sender.sendMessage(config.getMessage(sender, "baltop_footer",
+                    "position", playerPos,
+                    "currency", currency.name()));
+        }
     }
 
     private int executeHide(CommandContext<CommandSourceStack> ctx) {

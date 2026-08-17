@@ -37,12 +37,14 @@ public class EconomyCommand {
     private final ConfigManager config;
 
     private final me.usainsrht.basiceconomy.impl.util.PlayerFormatter playerFormatter;
+    private final PayCommand payCommand;
 
     public EconomyCommand(BasicEconomyPlugin plugin, AccountManagerImpl accountManager, ConfigManager config, me.usainsrht.basiceconomy.impl.util.PlayerFormatter playerFormatter) {
         this.plugin = plugin;
         this.accountManager = accountManager;
         this.config = config;
         this.playerFormatter = playerFormatter;
+        this.payCommand = new PayCommand(plugin, accountManager, config, playerFormatter);
     }
 
     public LiteralArgumentBuilder<CommandSourceStack> build(String name) {
@@ -60,6 +62,19 @@ public class EconomyCommand {
                 cmd.then(Commands.literal(cur)
                         .executes(ctx -> executeSelf(ctx, accountManager.getCurrency(cur))));
             }
+        }
+
+        // /money send
+        String sendName = config.getSubcommandName("money", "send");
+        String sendPermission = config.getSubcommandPermission("money", "send", config.getCommandPermission("pay"));
+        List<String> sendAliases = config.getSubcommandAliases("money", "send");
+
+        List<String> sendNames = new ArrayList<>();
+        sendNames.add(sendName);
+        sendNames.addAll(sendAliases);
+
+        for (String sName : sendNames) {
+            cmd.then(payCommand.buildSubcommand(sName, sendPermission));
         }
 
         // /money reload
@@ -167,29 +182,74 @@ public class EconomyCommand {
 
     private CompletableFuture<Suggestions> suggestPlayers(CommandContext<CommandSourceStack> context, SuggestionsBuilder builder) {
         CommandSender sender = context.getSource().getSender();
+        String input = builder.getRemaining().toLowerCase();
+
+        // 1. Suggest subcommands FIRST if sender has permission
+        List<String> allowedSubcommands = new ArrayList<>();
+
+        String adminPerm = config.getSubcommandPermission("money", "admin", config.getCommandPermission("money") + ".admin");
+        if (sender.hasPermission(adminPerm)) {
+            allowedSubcommands.add(config.getSubcommandName("money", "set"));
+            allowedSubcommands.add(config.getSubcommandName("money", "add"));
+            allowedSubcommands.add(config.getSubcommandName("money", "remove"));
+        }
+
+        String sendPerm = config.getSubcommandPermission("money", "send", config.getCommandPermission("pay"));
+        if (sender.hasPermission(sendPerm)) {
+            allowedSubcommands.add(config.getSubcommandName("money", "send"));
+        }
+
+        String reloadPerm = config.getSubcommandPermission("money", "reload", config.getCommandPermission("money") + ".reload");
+        if (sender.hasPermission(reloadPerm)) {
+            allowedSubcommands.add(config.getSubcommandName("money", "reload"));
+        }
+
+        String helpPerm = config.getSubcommandPermission("money", "help", config.getCommandPermission("money") + ".help");
+        if (sender.hasPermission(helpPerm)) {
+            allowedSubcommands.add(config.getSubcommandName("money", "help"));
+        }
+
+        String infoPerm = config.getSubcommandPermission("money", "info", config.getCommandPermission("money") + ".info");
+        if (sender.hasPermission(infoPerm)) {
+            allowedSubcommands.add(config.getSubcommandName("money", "info"));
+        }
+
+        for (String sub : allowedSubcommands) {
+            if (sub.toLowerCase().startsWith(input)) {
+                builder.suggest(sub);
+            }
+        }
+
+        // 2. Check player balance permissions
         String othersPermission = config.getSubcommandPermission("money", "others", config.getCommandPermission("money") + ".others");
-        if (!sender.hasPermission(othersPermission)) {
+        String othersOfflinePermission = config.getOthersOfflinePermission();
+
+        boolean hasOthers = sender.hasPermission(othersPermission);
+        boolean hasOthersOffline = sender.hasPermission(othersOfflinePermission);
+
+        if (!hasOthers && !hasOthersOffline) {
+            return builder.buildFuture();
+        }
+
+        if (hasOthers && !hasOthersOffline) {
+            for (Player p : Bukkit.getOnlinePlayers()) {
+                if (PlayerVisibility.canSeePlayer(sender, p)) {
+                    if (p.getName().toLowerCase().startsWith(input)) {
+                        builder.suggest(p.getName());
+                    }
+                }
+            }
             return builder.buildFuture();
         }
 
         return CompletableFuture.supplyAsync(() -> {
-            String input = builder.getRemaining().toLowerCase();
-            String adminPermission = config.getSubcommandPermission("money", "admin", config.getCommandPermission("money") + ".admin");
-            boolean isAdmin = sender.hasPermission(adminPermission);
-
             Set<String> names = new HashSet<>();
             for (Player p : Bukkit.getOnlinePlayers()) {
-                if (isAdmin || PlayerVisibility.canSeePlayer(sender, p)) {
+                if (PlayerVisibility.canSeePlayer(sender, p)) {
                     names.add(p.getName());
                 }
             }
-            if (isAdmin) {
-                for (OfflinePlayer op : Bukkit.getOfflinePlayers()) {
-                    if (op.getName() != null) {
-                        names.add(op.getName());
-                    }
-                }
-            }
+            names.addAll(accountManager.getCachedOfflinePlayerNames());
 
             for (String name : names) {
                 if (name.toLowerCase().startsWith(input)) {
@@ -236,46 +296,58 @@ public class EconomyCommand {
     private int executeOther(CommandContext<CommandSourceStack> ctx, Currency currency) {
         CommandSender sender = ctx.getSource().getSender();
         String othersPermission = config.getSubcommandPermission("money", "others", config.getCommandPermission("money") + ".others");
-        if (!sender.hasPermission(othersPermission)) {
+        String othersOfflinePermission = config.getOthersOfflinePermission();
+
+        boolean hasOthers = sender.hasPermission(othersPermission);
+        boolean hasOthersOffline = sender.hasPermission(othersOfflinePermission);
+
+        if (!hasOthers && !hasOthersOffline) {
             return executeSelf(ctx, currency);
+        }
+
+        String targetName = StringArgumentType.getString(ctx, "player");
+
+        if (!hasOthersOffline) {
+            Player onlineTarget = Bukkit.getPlayerExact(targetName);
+            if (onlineTarget == null) {
+                onlineTarget = Bukkit.getPlayer(targetName);
+            }
+            if (onlineTarget == null || !PlayerVisibility.canSeePlayer(sender, onlineTarget)) {
+                sender.sendMessage(config.getMessage(sender, "player_not_found"));
+                return Command.SINGLE_SUCCESS;
+            }
+            final Player finalTarget = onlineTarget;
+            net.kyori.adventure.text.Component targetDisplay = playerFormatter.formatPlayer(finalTarget);
+            accountManager.getAccount(finalTarget.getUniqueId()).thenAccept(account -> {
+                BigDecimal bal = account.getBalance(currency);
+                Bukkit.getGlobalRegionScheduler().run(plugin, task ->
+                        sender.sendMessage(config.getMessage(sender, "balance_other",
+                                "player", targetDisplay,
+                                "amount", currency.format(bal)))
+                );
+            });
+            return Command.SINGLE_SUCCESS;
         }
 
         CompletableFuture.runAsync(() -> {
             try {
-                String targetName = StringArgumentType.getString(ctx, "player");
-                String adminPermission = config.getSubcommandPermission("money", "admin", config.getCommandPermission("money") + ".admin");
-                boolean isAdmin = sender.hasPermission(adminPermission);
+                Player onlineTarget = Bukkit.getPlayerExact(targetName);
+                if (onlineTarget == null) {
+                    onlineTarget = Bukkit.getPlayer(targetName);
+                }
 
                 OfflinePlayer target = null;
-                if (!isAdmin) {
-                    Player onlineTarget = Bukkit.getPlayerExact(targetName);
-                    if (onlineTarget == null) {
-                        onlineTarget = Bukkit.getPlayer(targetName);
-                    }
-                    if (onlineTarget == null || !PlayerVisibility.canSeePlayer(sender, onlineTarget)) {
+                if (onlineTarget != null && PlayerVisibility.canSeePlayer(sender, onlineTarget)) {
+                    target = onlineTarget;
+                } else {
+                    OfflinePlayer offlineTarget = Bukkit.getOfflinePlayer(targetName);
+                    if (!offlineTarget.hasPlayedBefore() && !offlineTarget.isOnline()) {
                         Bukkit.getGlobalRegionScheduler().run(plugin, task ->
                                 sender.sendMessage(config.getMessage(sender, "player_not_found"))
                         );
                         return;
                     }
-                    target = onlineTarget;
-                } else {
-                    Player onlineTarget = Bukkit.getPlayerExact(targetName);
-                    if (onlineTarget == null) {
-                        onlineTarget = Bukkit.getPlayer(targetName);
-                    }
-                    if (onlineTarget != null) {
-                        target = onlineTarget;
-                    } else {
-                        OfflinePlayer offlineTarget = Bukkit.getOfflinePlayer(targetName);
-                        if (!offlineTarget.hasPlayedBefore() && !offlineTarget.isOnline()) {
-                            Bukkit.getGlobalRegionScheduler().run(plugin, task ->
-                                    sender.sendMessage(config.getMessage(sender, "player_not_found"))
-                            );
-                            return;
-                        }
-                        target = offlineTarget;
-                    }
+                    target = offlineTarget;
                 }
 
                 final OfflinePlayer finalTarget = target;

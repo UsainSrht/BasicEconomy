@@ -56,6 +56,36 @@ public class MiniPlaceholdersExpansion {
 
                         return Tag.inserting(Component.text(currency.format(account.getBalance(currency))));
                     })
+                    .audiencePlaceholder(Player.class, "position", (player, queue, ctx) -> {
+                        Currency currency;
+                        if (queue.hasNext()) {
+                            String currName = queue.pop().value();
+                            currency = accountManager.getCurrency(currName);
+                        } else {
+                            currency = accountManager.getDefaultCurrency();
+                        }
+
+                        if (currency == null) {
+                            return Tag.inserting(Component.text("Invalid Currency"));
+                        }
+
+                        return Tag.inserting(Component.text(accountManager.getPlayerPosition(player.getUniqueId(), currency)));
+                    })
+                    .audiencePlaceholder(Player.class, "rank", (player, queue, ctx) -> {
+                        Currency currency;
+                        if (queue.hasNext()) {
+                            String currName = queue.pop().value();
+                            currency = accountManager.getCurrency(currName);
+                        } else {
+                            currency = accountManager.getDefaultCurrency();
+                        }
+
+                        if (currency == null) {
+                            return Tag.inserting(Component.text("Invalid Currency"));
+                        }
+
+                        return Tag.inserting(Component.text(accountManager.getPlayerPosition(player.getUniqueId(), currency)));
+                    })
                     // Global placeholder: <basiceconomy_baltop:pos> or <basiceconomy_baltop:type:pos:currency>
                     .globalPlaceholder("baltop", (queue, ctx) -> {
                         if (!queue.hasNext()) {

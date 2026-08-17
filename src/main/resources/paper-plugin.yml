@@ -26,3 +26,41 @@ dependencies:
       join-classpath: true
 
 loader: me.usainsrht.basiceconomy.impl.loader.BasicEconomyLoader
+
+permissions:
+  basiceconomy.command.money:
+    default: true
+    description: Allows using /money command
+  basiceconomy.command.money.admin:
+    default: op
+    description: Allows admin money commands (add, set, remove)
+  basiceconomy.command.money.reload:
+    default: op
+    description: Allows reloading config
+  basiceconomy.command.money.help:
+    default: true
+    description: Allows using help command
+  basiceconomy.command.money.info:
+    default: true
+    description: Allows using info command
+  basiceconomy.command.money.others:
+    default: true
+    description: Allows viewing other players balance
+  basiceconomy.command.money.others.offline:
+    default: op
+    description: Allows viewing offline players balance
+  basiceconomy.command.pay:
+    default: true
+    description: Allows paying other players
+  basiceconomy.command.pay.offline:
+    default: op
+    description: Allows paying offline players
+  basiceconomy.command.baltop:
+    default: true
+    description: Allows viewing top balances
+  basiceconomy.command.baltop.hide:
+    default: op
+    description: Allows hiding players from baltop
+  basiceconomy.command.baltop.unhide:
+    default: op
+    description: Allows unhiding players from baltop

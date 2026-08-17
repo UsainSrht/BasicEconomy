@@ -65,6 +65,7 @@ public class AccountManagerImpl implements EconomyManager {
 
     private final me.usainsrht.basiceconomy.impl.util.PlayerFormatter playerFormatter;
     private final Map<Currency, List<BaltopEntry>> baltopCache = new ConcurrentHashMap<>();
+    private final Set<String> cachedOfflinePlayerNames = ConcurrentHashMap.newKeySet();
 
     public AccountManagerImpl(BasicEconomyPlugin plugin, ConfigManager config, Storage storage, me.usainsrht.basiceconomy.impl.util.PlayerFormatter playerFormatter) {
         this.plugin = plugin;
@@ -74,6 +75,21 @@ public class AccountManagerImpl implements EconomyManager {
         startTasks();
         initSync();
         repairOnStartup();
+        initOfflinePlayerCache();
+    }
+
+    public void initOfflinePlayerCache() {
+        CompletableFuture.runAsync(() -> {
+            for (org.bukkit.OfflinePlayer op : Bukkit.getOfflinePlayers()) {
+                if (op.getName() != null && !op.getName().isEmpty()) {
+                    cachedOfflinePlayerNames.add(op.getName());
+                }
+            }
+        });
+    }
+
+    public Set<String> getCachedOfflinePlayerNames() {
+        return cachedOfflinePlayerNames;
     }
 
     private void startTasks() {
@@ -89,7 +105,7 @@ public class AccountManagerImpl implements EconomyManager {
     }
 
     private void updateBaltopCache() {
-        int fetchLimit = 100 + config.getBaltopHiddenPlayers().size();
+        int fetchLimit = config.getBaltopCacheLimit() + config.getBaltopHiddenPlayers().size();
         Set<UUID> hidden = config.getBaltopHiddenPlayers();
         for (Currency currency : config.getCurrencies().values()) {
             if (currency.baltopEnabled()) {
@@ -112,6 +128,21 @@ public class AccountManagerImpl implements EconomyManager {
         return baltopCache.get(currency);
     }
 
+    public String getPlayerPosition(UUID uuid, Currency currency) {
+        if (currency == null || uuid == null) {
+            return config.getBaltopOutOfRangePosition();
+        }
+        List<BaltopEntry> cached = baltopCache.get(currency);
+        if (cached != null) {
+            for (int i = 0; i < cached.size(); i++) {
+                if (cached.get(i).getUuid().equals(uuid)) {
+                    return String.valueOf(i + 1);
+                }
+            }
+        }
+        return config.getBaltopOutOfRangePosition();
+    }
+
     private void cleanupCache() {
         // Remove accounts of offline players from permanent cache
         loadedAccounts.keySet().removeIf(uuid -> Bukkit.getPlayer(uuid) == null);
@@ -120,6 +151,10 @@ public class AccountManagerImpl implements EconomyManager {
     }
 
     public void handleJoin(UUID uuid) {
+        org.bukkit.entity.Player player = Bukkit.getPlayer(uuid);
+        if (player != null && player.getName() != null) {
+            cachedOfflinePlayerNames.add(player.getName());
+        }
         invalidateAccount(uuid);
         getAccount(uuid);
     }
@@ -321,7 +356,7 @@ public class AccountManagerImpl implements EconomyManager {
                     .collect(Collectors.toList());
             return CompletableFuture.completedFuture(result);
         }
-        int fetchLimit = Math.max(limit + config.getBaltopHiddenPlayers().size(), 100);
+        int fetchLimit = Math.max(limit + config.getBaltopHiddenPlayers().size(), config.getBaltopCacheLimit());
         return storage.getTopBalances(currency, fetchLimit).thenApply(top ->
                 top.stream()
                         .filter(e -> !config.getBaltopHiddenPlayers().contains(e.getKey()))

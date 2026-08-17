@@ -38,8 +38,12 @@ public class PayCommand {
     }
 
     public LiteralArgumentBuilder<CommandSourceStack> build(String name) {
+        return buildSubcommand(name, config.getCommandPermission("pay"));
+    }
+
+    public LiteralArgumentBuilder<CommandSourceStack> buildSubcommand(String name, String permission) {
         LiteralArgumentBuilder<CommandSourceStack> cmd = Commands.literal(name)
-                .requires(src -> src.getSender().hasPermission(config.getCommandPermission("pay")) && src.getSender() instanceof Player);
+                .requires(src -> src.getSender().hasPermission(permission));
 
         boolean singleCurrency = config.getCurrencies().size() <= 1;
 
@@ -63,14 +67,34 @@ public class PayCommand {
 
     private CompletableFuture<Suggestions> suggestPayPlayers(CommandContext<CommandSourceStack> context, SuggestionsBuilder builder) {
         CommandSender sender = context.getSource().getSender();
-        return CompletableFuture.supplyAsync(() -> {
-            String input = builder.getRemaining().toLowerCase();
+        boolean hasOfflinePay = sender.hasPermission(config.getPayOfflinePermission())
+                || sender.hasPermission(config.getOthersOfflinePermission());
+
+        String input = builder.getRemaining().toLowerCase();
+
+        if (!hasOfflinePay) {
             for (Player p : Bukkit.getOnlinePlayers()) {
                 if (PlayerVisibility.canSeePlayer(sender, p)) {
                     String name = p.getName();
                     if (name.toLowerCase().startsWith(input)) {
                         builder.suggest(name);
                     }
+                }
+            }
+            return builder.buildFuture();
+        }
+
+        return CompletableFuture.supplyAsync(() -> {
+            java.util.Set<String> names = new java.util.HashSet<>();
+            for (Player p : Bukkit.getOnlinePlayers()) {
+                if (PlayerVisibility.canSeePlayer(sender, p)) {
+                    names.add(p.getName());
+                }
+            }
+            names.addAll(accountManager.getCachedOfflinePlayerNames());
+            for (String name : names) {
+                if (name.toLowerCase().startsWith(input)) {
+                    builder.suggest(name);
                 }
             }
             return builder.build();
@@ -88,7 +112,12 @@ public class PayCommand {
     }
 
     private int execute(CommandContext<CommandSourceStack> ctx, String currName) {
-        Player sender = (Player) ctx.getSource().getSender();
+        CommandSender rawSender = ctx.getSource().getSender();
+        if (!(rawSender instanceof Player sender)) {
+            rawSender.sendMessage(config.getMessage(rawSender, "player_only"));
+            return 0;
+        }
+
         Currency currency = currName != null ? accountManager.getCurrency(currName) : accountManager.getDefaultCurrency();
 
         if (currency == null) {
@@ -105,17 +134,78 @@ public class PayCommand {
         double amount = DoubleArgumentType.getDouble(ctx, "amount");
         BigDecimal bdAmount = BigDecimal.valueOf(amount);
 
-        CompletableFuture.runAsync(() -> {
-            try {
-                Player target = Bukkit.getPlayerExact(targetName);
-                if (target == null) {
-                    target = Bukkit.getPlayer(targetName);
+        boolean hasOfflinePay = sender.hasPermission(config.getPayOfflinePermission())
+                || sender.hasPermission(config.getOthersOfflinePermission());
+
+        if (!hasOfflinePay) {
+            Player target = Bukkit.getPlayerExact(targetName);
+            if (target == null) {
+                target = Bukkit.getPlayer(targetName);
+            }
+
+            if (target == null || !PlayerVisibility.canSeePlayer(sender, target)) {
+                sender.sendMessage(config.getMessage(sender, "player_not_found"));
+                return Command.SINGLE_SUCCESS;
+            }
+
+            if (sender.getUniqueId().equals(target.getUniqueId())) {
+                sender.sendMessage(config.getMessage(sender, "cannot_pay_self"));
+                return Command.SINGLE_SUCCESS;
+            }
+
+            final Player finalTarget = target;
+            accountManager.getAccount(sender.getUniqueId()).thenAccept(senderAcc -> {
+                if (senderAcc.getBalance(currency).compareTo(bdAmount) < 0) {
+                    Bukkit.getGlobalRegionScheduler().run(plugin, task -> sender.sendMessage(config.getMessage(sender, "not_enough_money")));
+                    return;
                 }
 
-                if (target == null || !PlayerVisibility.canSeePlayer(sender, target)) {
-                    Bukkit.getGlobalRegionScheduler().run(plugin, task ->
-                            sender.sendMessage(config.getMessage(sender, "player_not_found")));
-                    return;
+                senderAcc.removeBalance(currency, bdAmount).thenAccept(removed -> {
+                    if (removed) {
+                        accountManager.getAccount(finalTarget.getUniqueId()).thenAccept(targetAcc -> {
+                            targetAcc.addBalance(currency, bdAmount).thenAccept(added -> {
+                                if (added) {
+                                    net.kyori.adventure.text.Component targetDisplay = playerFormatter.formatPlayer(finalTarget);
+                                    net.kyori.adventure.text.Component senderDisplay = playerFormatter.formatPlayer(sender);
+                                    Bukkit.getGlobalRegionScheduler().run(plugin, task -> {
+                                        sender.sendMessage(config.getMessage(sender, "pay_success",
+                                                "player", targetDisplay,
+                                                "amount", currency.format(bdAmount)));
+                                        finalTarget.sendMessage(config.getMessage(finalTarget, "pay_received",
+                                                "player", senderDisplay,
+                                                "amount", currency.format(bdAmount)));
+                                    });
+                                } else {
+                                    senderAcc.addBalance(currency, bdAmount);
+                                }
+                            });
+                        });
+                    } else {
+                        Bukkit.getGlobalRegionScheduler().run(plugin, task -> sender.sendMessage(config.getMessage(sender, "invalid_amount")));
+                    }
+                });
+            });
+            return Command.SINGLE_SUCCESS;
+        }
+
+        CompletableFuture.runAsync(() -> {
+            try {
+                Player onlineTarget = Bukkit.getPlayerExact(targetName);
+                if (onlineTarget == null) {
+                    onlineTarget = Bukkit.getPlayer(targetName);
+                }
+
+                org.bukkit.OfflinePlayer target = null;
+                if (onlineTarget != null && PlayerVisibility.canSeePlayer(sender, onlineTarget)) {
+                    target = onlineTarget;
+                } else {
+                    org.bukkit.OfflinePlayer offlineTarget = Bukkit.getOfflinePlayer(targetName);
+                    if (!offlineTarget.hasPlayedBefore() && !offlineTarget.isOnline()) {
+                        Bukkit.getGlobalRegionScheduler().run(plugin, task ->
+                                sender.sendMessage(config.getMessage(sender, "player_not_found")));
+                        return;
+                    }
+                    target = offlineTarget;
                 }
 
                 if (sender.getUniqueId().equals(target.getUniqueId())) {
@@ -124,7 +214,7 @@ public class PayCommand {
                     return;
                 }
 
-                final Player finalTarget = target;
+                final org.bukkit.OfflinePlayer finalTarget = target;
                 accountManager.getAccount(sender.getUniqueId()).thenAccept(senderAcc -> {
                     if (senderAcc.getBalance(currency).compareTo(bdAmount) < 0) {
                         Bukkit.getGlobalRegionScheduler().run(plugin, task -> sender.sendMessage(config.getMessage(sender, "not_enough_money")));
@@ -142,12 +232,13 @@ public class PayCommand {
                                             sender.sendMessage(config.getMessage(sender, "pay_success",
                                                     "player", targetDisplay,
                                                     "amount", currency.format(bdAmount)));
-                                            finalTarget.sendMessage(config.getMessage(finalTarget, "pay_received",
-                                                    "player", senderDisplay,
-                                                    "amount", currency.format(bdAmount)));
+                                            if (finalTarget.isOnline() && finalTarget.getPlayer() != null) {
+                                                finalTarget.getPlayer().sendMessage(config.getMessage(finalTarget.getPlayer(), "pay_received",
+                                                        "player", senderDisplay,
+                                                        "amount", currency.format(bdAmount)));
+                                            }
                                         });
                                     } else {
-                                        // Refund on failure
                                         senderAcc.addBalance(currency, bdAmount);
                                     }
                                 });
