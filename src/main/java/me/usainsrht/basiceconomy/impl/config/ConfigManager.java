@@ -1,12 +1,17 @@
 package me.usainsrht.basiceconomy.impl.config;
 
 import me.usainsrht.basiceconomy.api.Currency;
+import me.usainsrht.basiceconomy.impl.integration.MiniPlaceholdersHook;
+import net.kyori.adventure.audience.Audience;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.MiniMessage;
+import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
+import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -102,19 +107,16 @@ public class ConfigManager {
     }
 
     public Component parse(String text) {
-        return parse(text, (net.kyori.adventure.audience.Audience) null);
+        return parse(text, null);
     }
 
-    public Component parse(String text, net.kyori.adventure.audience.Audience audience) {
-        net.kyori.adventure.text.minimessage.tag.resolver.TagResolver.Builder builder = net.kyori.adventure.text.minimessage.tag.resolver.TagResolver
-                .builder();
-        if (me.usainsrht.basiceconomy.impl.integration.MiniPlaceholdersHook.isAvailable()) {
+    public Component parse(String text, Audience audience) {
+        TagResolver.Builder builder = TagResolver.builder();
+        if (MiniPlaceholdersHook.isAvailable()) {
             if (audience != null) {
-                builder.resolver(me.usainsrht.basiceconomy.impl.integration.MiniPlaceholdersHook
-                        .getAudienceGlobalPlaceholders());
+                builder.resolver(MiniPlaceholdersHook.getAudienceGlobalPlaceholders());
             } else {
-                builder.resolver(
-                        me.usainsrht.basiceconomy.impl.integration.MiniPlaceholdersHook.getGlobalPlaceholders());
+                builder.resolver(MiniPlaceholdersHook.getGlobalPlaceholders());
             }
         }
         return MiniMessage.miniMessage().deserialize(text, builder.build());
@@ -129,10 +131,10 @@ public class ConfigManager {
     }
 
     public Component getMessage(String key, Object... placeholders) {
-        return getMessage((net.kyori.adventure.audience.Audience) null, key, placeholders);
+        return getMessage((Audience) null, key, placeholders);
     }
 
-    public Component getMessage(net.kyori.adventure.audience.Audience audience, String key, Object... placeholders) {
+    public Component getMessage(Audience audience, String key, Object... placeholders) {
         String rawMsg = rawMessages.get(key);
         if (rawMsg == null) {
             return Component.text(key);
@@ -141,16 +143,13 @@ public class ConfigManager {
         String rawPrefix = rawMessages.getOrDefault("prefix", "");
         boolean showPrefix = !key.equals("prefix") && !key.equals("money_help") && !key.equals("money_info");
 
-        net.kyori.adventure.text.minimessage.tag.resolver.TagResolver.Builder builder = net.kyori.adventure.text.minimessage.tag.resolver.TagResolver
-                .builder();
+        TagResolver.Builder builder = TagResolver.builder();
 
-        if (me.usainsrht.basiceconomy.impl.integration.MiniPlaceholdersHook.isAvailable()) {
+        if (MiniPlaceholdersHook.isAvailable()) {
             if (audience != null) {
-                builder.resolver(me.usainsrht.basiceconomy.impl.integration.MiniPlaceholdersHook
-                        .getAudienceGlobalPlaceholders());
+                builder.resolver(MiniPlaceholdersHook.getAudienceGlobalPlaceholders());
             } else {
-                builder.resolver(
-                        me.usainsrht.basiceconomy.impl.integration.MiniPlaceholdersHook.getGlobalPlaceholders());
+                builder.resolver(MiniPlaceholdersHook.getGlobalPlaceholders());
             }
         }
 
@@ -159,16 +158,14 @@ public class ConfigManager {
                 String pKey = String.valueOf(placeholders[i]);
                 Object pVal = placeholders[i + 1];
                 if (pVal instanceof Component cVal) {
-                    builder.resolver(
-                            net.kyori.adventure.text.minimessage.tag.resolver.Placeholder.component(pKey, cVal));
+                    builder.resolver(Placeholder.component(pKey, cVal));
                 } else if (pVal != null) {
-                    builder.resolver(net.kyori.adventure.text.minimessage.tag.resolver.Placeholder.parsed(pKey,
-                            String.valueOf(pVal)));
+                    builder.resolver(Placeholder.parsed(pKey, String.valueOf(pVal)));
                 }
             }
         }
 
-        net.kyori.adventure.text.minimessage.tag.resolver.TagResolver resolver = builder.build();
+        TagResolver resolver = builder.build();
         Component msgComp = MiniMessage.miniMessage().deserialize(rawMsg, resolver);
 
         if (!showPrefix) {
@@ -190,6 +187,21 @@ public class ConfigManager {
         return config.getStringList("commands." + command + ".aliases");
     }
 
+    public List<String> getCommandNamesWithAliases(String command) {
+        String name = getCommandName(command);
+        List<String> aliases = getCommandAliases(command);
+        List<String> names = new ArrayList<>();
+        if (name != null && !name.isBlank()) {
+            names.add(name);
+        }
+        for (String alias : aliases) {
+            if (alias != null && !alias.isBlank() && !names.contains(alias)) {
+                names.add(alias);
+            }
+        }
+        return names;
+    }
+
     public String getCommandPermission(String command) {
         return config.getString("commands." + command + ".permission", "basiceconomy.command." + command);
     }
@@ -200,6 +212,21 @@ public class ConfigManager {
 
     public List<String> getSubcommandAliases(String parent, String subKey) {
         return config.getStringList("commands." + parent + ".subcommands." + subKey + ".aliases");
+    }
+
+    public List<String> getSubcommandNamesWithAliases(String parent, String subKey) {
+        String name = getSubcommandName(parent, subKey);
+        List<String> aliases = getSubcommandAliases(parent, subKey);
+        List<String> names = new ArrayList<>();
+        if (name != null && !name.isBlank()) {
+            names.add(name);
+        }
+        for (String alias : aliases) {
+            if (alias != null && !alias.isBlank() && !names.contains(alias)) {
+                names.add(alias);
+            }
+        }
+        return names;
     }
 
     public String getSubcommandPermission(String parent, String subKey, String defaultPerm) {

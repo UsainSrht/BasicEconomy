@@ -3,15 +3,18 @@ package me.usainsrht.basiceconomy.impl;
 import me.usainsrht.basiceconomy.api.BasicEconomyAPI;
 import me.usainsrht.basiceconomy.impl.account.AccountManagerImpl;
 import me.usainsrht.basiceconomy.impl.command.CommandRegistry;
+import me.usainsrht.basiceconomy.impl.command.CommandSuggestionListener;
 import me.usainsrht.basiceconomy.impl.config.ConfigManager;
+import me.usainsrht.basiceconomy.impl.integration.MiniPlaceholdersExpansion;
 import me.usainsrht.basiceconomy.impl.integration.PlaceholderAPIExpansion;
+import me.usainsrht.basiceconomy.impl.integration.Vault2Hook;
 import me.usainsrht.basiceconomy.impl.integration.VaultEconomyImpl;
 import me.usainsrht.basiceconomy.impl.storage.MongoStorage;
 import me.usainsrht.basiceconomy.impl.storage.SqlStorage;
 import me.usainsrht.basiceconomy.impl.storage.Storage;
+import me.usainsrht.basiceconomy.impl.util.PlayerFormatter;
 import net.milkbowl.vault.economy.Economy;
 import org.bstats.bukkit.Metrics;
-import org.bukkit.Bukkit;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
@@ -23,17 +26,17 @@ public class BasicEconomyPlugin extends JavaPlugin implements Listener {
 
     private ConfigManager configManager;
     private Storage storage;
-    private me.usainsrht.basiceconomy.impl.util.PlayerFormatter playerFormatter;
+    private PlayerFormatter playerFormatter;
     private AccountManagerImpl accountManager;
     private VaultEconomyImpl vaultEconomy;
-    private me.usainsrht.basiceconomy.impl.integration.MiniPlaceholdersExpansion miniPlaceholdersExpansion;
+    private MiniPlaceholdersExpansion miniPlaceholdersExpansion;
 
     @Override
     public void onEnable() {
         saveDefaultConfig();
 
         configManager = new ConfigManager(getConfig());
-        playerFormatter = new me.usainsrht.basiceconomy.impl.util.PlayerFormatter(configManager);
+        playerFormatter = new PlayerFormatter(configManager);
 
         try {
             if (configManager.getStorageType().equals("MONGODB")) {
@@ -54,6 +57,7 @@ public class BasicEconomyPlugin extends JavaPlugin implements Listener {
 
         // Register events
         getServer().getPluginManager().registerEvents(this, this);
+        getServer().getPluginManager().registerEvents(new CommandSuggestionListener(configManager), this);
 
         // Vault hook
         if (getServer().getPluginManager().getPlugin("Vault") != null) {
@@ -65,7 +69,7 @@ public class BasicEconomyPlugin extends JavaPlugin implements Listener {
         // VaultUnlocked hook
         try {
             Class.forName("net.milkbowl.vault2.economy.Economy");
-            me.usainsrht.basiceconomy.impl.integration.Vault2Hook.register(this, accountManager);
+            Vault2Hook.register(this, accountManager);
         } catch (Throwable ignored) {
             // VaultUnlocked not present
         }
@@ -77,7 +81,7 @@ public class BasicEconomyPlugin extends JavaPlugin implements Listener {
         }
 
         // MiniPlaceholders hook
-        miniPlaceholdersExpansion = new me.usainsrht.basiceconomy.impl.integration.MiniPlaceholdersExpansion(this, accountManager, configManager);
+        miniPlaceholdersExpansion = new MiniPlaceholdersExpansion(this, accountManager, configManager);
         miniPlaceholdersExpansion.register();
 
         // Commands

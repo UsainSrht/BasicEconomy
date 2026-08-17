@@ -6,6 +6,7 @@ import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
 import me.usainsrht.basiceconomy.impl.BasicEconomyPlugin;
 import me.usainsrht.basiceconomy.impl.account.AccountManagerImpl;
 import me.usainsrht.basiceconomy.impl.config.ConfigManager;
+import me.usainsrht.basiceconomy.impl.util.PlayerFormatter;
 import org.bukkit.plugin.Plugin;
 
 import java.util.List;
@@ -16,10 +17,9 @@ public class CommandRegistry {
     private final BasicEconomyPlugin plugin;
     private final AccountManagerImpl accountManager;
     private final ConfigManager config;
+    private final PlayerFormatter playerFormatter;
 
-    private final me.usainsrht.basiceconomy.impl.util.PlayerFormatter playerFormatter;
-
-    public CommandRegistry(BasicEconomyPlugin plugin, AccountManagerImpl accountManager, ConfigManager config, me.usainsrht.basiceconomy.impl.util.PlayerFormatter playerFormatter) {
+    public CommandRegistry(BasicEconomyPlugin plugin, AccountManagerImpl accountManager, ConfigManager config, PlayerFormatter playerFormatter) {
         this.plugin = plugin;
         this.accountManager = accountManager;
         this.config = config;
@@ -28,33 +28,24 @@ public class CommandRegistry {
 
     public void register() {
         LifecycleEventManager<Plugin> manager = plugin.getLifecycleManager();
-        
+
         manager.registerEventHandler(LifecycleEvents.COMMANDS, event -> {
             Commands commands = event.registrar();
 
-            EconomyCommand moneyCmd = new EconomyCommand(plugin, accountManager, config, playerFormatter);
-            String moneyName = config.getCommandName("money");
-            commands.register(moneyCmd.build(moneyName).build(), "BasicEconomy main command", List.of());
-            List<String> moneyAliases = config.getCommandAliases("money");
-            for (String alias : moneyAliases) {
-                commands.register(moneyCmd.build(alias).build(), "BasicEconomy main command", List.of());
-            }
-
             PayCommand payCmd = new PayCommand(plugin, accountManager, config, playerFormatter);
             String payName = config.getCommandName("pay");
-            commands.register(payCmd.build(payName).build(), "BasicEconomy pay command", List.of());
             List<String> payAliases = config.getCommandAliases("pay");
-            for (String alias : payAliases) {
-                commands.register(payCmd.build(alias).build(), "BasicEconomy pay command", List.of());
-            }
+            commands.register(payCmd.build(payName).build(), "BasicEconomy pay command", payAliases);
+
+            EconomyCommand moneyCmd = new EconomyCommand(plugin, accountManager, config, playerFormatter, payCmd);
+            String moneyName = config.getCommandName("money");
+            List<String> moneyAliases = config.getCommandAliases("money");
+            commands.register(moneyCmd.build(moneyName).build(), "BasicEconomy main command", moneyAliases);
 
             BaltopCommand baltopCmd = new BaltopCommand(plugin, accountManager, config, playerFormatter);
             String baltopName = config.getCommandName("baltop");
-            commands.register(baltopCmd.build(baltopName).build(), "BasicEconomy baltop command", List.of());
             List<String> baltopAliases = config.getCommandAliases("baltop");
-            for (String alias : baltopAliases) {
-                commands.register(baltopCmd.build(alias).build(), "BasicEconomy baltop command", List.of());
-            }
+            commands.register(baltopCmd.build(baltopName).build(), "BasicEconomy baltop command", baltopAliases);
         });
     }
 }
