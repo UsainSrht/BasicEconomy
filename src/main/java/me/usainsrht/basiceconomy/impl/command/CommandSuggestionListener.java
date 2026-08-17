@@ -90,6 +90,14 @@ public class CommandSuggestionListener implements Listener {
             }
         }
 
+        // See subcommand
+        if (matchesAny(lower, "money", "see")) {
+            String seePerm = config.getSubcommandPermission("money", "see", config.getOthersOfflinePermission());
+            if (!player.hasPermission(seePerm)) {
+                return true;
+            }
+        }
+
         // Reload subcommand
         if (matchesAny(lower, "money", "reload")) {
             String reloadPerm = config.getSubcommandPermission("money", "reload", config.getCommandPermission("money") + ".reload");

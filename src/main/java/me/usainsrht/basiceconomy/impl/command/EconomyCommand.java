@@ -67,6 +67,7 @@ public class EconomyCommand {
         registerHelpSubcommand(cmd);
         registerInfoSubcommand(cmd);
         registerAdminSubcommands(cmd);
+        registerSeeSubcommand(cmd);
         registerOthersArgument(cmd);
 
         return cmd;
@@ -136,18 +137,36 @@ public class EconomyCommand {
         }
     }
 
+    private void registerSeeSubcommand(LiteralArgumentBuilder<CommandSourceStack> root) {
+        String seePermission = config.getSubcommandPermission("money", "see", config.getOthersOfflinePermission());
+        boolean singleCurrency = config.getCurrencies().size() <= 1;
+
+        for (String sName : config.getSubcommandNamesWithAliases("money", "see")) {
+            LiteralArgumentBuilder<CommandSourceStack> seeNode = CommandHelper.literal(sName)
+                    .requires(src -> src.getSender().hasPermission(seePermission));
+
+            RequiredArgumentBuilder<CommandSourceStack, String> targetNode = Commands.argument("player", StringArgumentType.word())
+                    .suggests((ctx, builder) -> CommandHelper.suggestPlayers(ctx.getSource().getSender(), accountManager, builder, true))
+                    .executes(this::executeOther);
+
+            if (!singleCurrency) {
+                targetNode.then(Commands.argument("currency", StringArgumentType.word())
+                        .suggests((ctx, builder) -> CommandHelper.suggestCurrencies(config, builder))
+                        .executes(this::executeOtherCurrency));
+            }
+
+            seeNode.then(targetNode);
+            root.then(seeNode);
+        }
+    }
+
     private void registerOthersArgument(LiteralArgumentBuilder<CommandSourceStack> root) {
         String othersPermission = config.getSubcommandPermission("money", "others", config.getCommandPermission("money") + ".others");
-        String othersOfflinePermission = config.getOthersOfflinePermission();
         boolean singleCurrency = config.getCurrencies().size() <= 1;
 
         RequiredArgumentBuilder<CommandSourceStack, String> otherTarget = Commands.argument("player", StringArgumentType.word())
-                .requires(src -> src.getSender().hasPermission(othersPermission) || src.getSender().hasPermission(othersOfflinePermission))
-                .suggests((ctx, builder) -> {
-                    CommandSender sender = ctx.getSource().getSender();
-                    boolean hasOffline = sender.hasPermission(othersOfflinePermission);
-                    return CommandHelper.suggestPlayers(sender, accountManager, builder, hasOffline);
-                });
+                .requires(src -> src.getSender().hasPermission(othersPermission))
+                .suggests((ctx, builder) -> CommandHelper.suggestPlayers(ctx.getSource().getSender(), accountManager, builder, false));
 
         otherTarget.executes(this::executeOther);
 

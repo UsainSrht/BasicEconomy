@@ -87,6 +87,10 @@ commands:
         permission: "basiceconomy.command.money.others"
         offline:
           permission: "basiceconomy.command.money.others.offline"
+      see:
+        name: "see"
+        aliases: []
+        permission: "basiceconomy.command.money.others.offline"
       info:
         name: "info"
         aliases: []
@@ -180,6 +184,7 @@ messages:
     <gold>--- BasicEconomy Help ---</gold>
     <gray>/money - Check your balance</gray>
     <gray>/money <player> - Check player's balance</gray>
+    <gray>/money see <player> [currency] - Check player's balance (including offline)</gray>
     <gray>/money help - Show this help menu</gray>
     <gray>/money info - Show plugin information</gray>
     <gray>/money reload - Reload configuration</gray>
