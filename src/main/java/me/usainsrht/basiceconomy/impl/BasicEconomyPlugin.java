@@ -6,7 +6,9 @@ import me.usainsrht.basiceconomy.impl.command.CommandRegistry;
 import me.usainsrht.basiceconomy.impl.command.CommandSuggestionListener;
 import me.usainsrht.basiceconomy.impl.config.ConfigManager;
 import me.usainsrht.basiceconomy.impl.integration.MiniPlaceholdersExpansion;
+import me.usainsrht.basiceconomy.impl.integration.MiniPlaceholdersHook;
 import me.usainsrht.basiceconomy.impl.integration.PlaceholderAPIExpansion;
+import me.usainsrht.basiceconomy.impl.integration.SCChatHook;
 import me.usainsrht.basiceconomy.impl.integration.Vault2Hook;
 import me.usainsrht.basiceconomy.impl.integration.VaultEconomyImpl;
 import me.usainsrht.basiceconomy.impl.storage.MongoStorage;
@@ -59,8 +61,31 @@ public class BasicEconomyPlugin extends JavaPlugin implements Listener {
         getServer().getPluginManager().registerEvents(this, this);
         getServer().getPluginManager().registerEvents(new CommandSuggestionListener(configManager), this);
 
+        // Setup integration hooks
+        setupHooks();
+
+        // Commands
+        CommandRegistry registry = new CommandRegistry(this, accountManager, configManager, playerFormatter);
+        registry.register();
+
+        // bStats
+        int pluginId = 32082; // Placeholder ID
+        new Metrics(this, pluginId);
+
+        getLogger().info("BasicEconomy has been enabled.");
+    }
+
+    @EventHandler
+    public void onServerLoad(org.bukkit.event.server.ServerLoadEvent event) {
+        setupHooks();
+        if (accountManager != null) {
+            accountManager.refreshBaltopCache();
+        }
+    }
+
+    public void setupHooks() {
         // Vault hook
-        if (getServer().getPluginManager().getPlugin("Vault") != null) {
+        if (getServer().getPluginManager().isPluginEnabled("Vault") && vaultEconomy == null) {
             vaultEconomy = new VaultEconomyImpl(this, accountManager);
             getServer().getServicesManager().register(Economy.class, vaultEconomy, this, ServicePriority.Highest);
             getLogger().info("Hooked into Vault!");
@@ -75,24 +100,21 @@ public class BasicEconomyPlugin extends JavaPlugin implements Listener {
         }
 
         // PlaceholderAPI hook
-        if (getServer().getPluginManager().getPlugin("PlaceholderAPI") != null) {
+        if (getServer().getPluginManager().isPluginEnabled("PlaceholderAPI")) {
             new PlaceholderAPIExpansion(this, accountManager, configManager).register();
             getLogger().info("Hooked into PlaceholderAPI!");
         }
 
         // MiniPlaceholders hook
-        miniPlaceholdersExpansion = new MiniPlaceholdersExpansion(this, accountManager, configManager);
-        miniPlaceholdersExpansion.register();
+        if (MiniPlaceholdersHook.isAvailable() && miniPlaceholdersExpansion == null) {
+            miniPlaceholdersExpansion = new MiniPlaceholdersExpansion(this, accountManager, configManager);
+            miniPlaceholdersExpansion.register();
+        }
 
-        // Commands
-        CommandRegistry registry = new CommandRegistry(this, accountManager, configManager, playerFormatter);
-        registry.register();
-
-        // bStats
-        int pluginId = 32082; // Placeholder ID
-        new Metrics(this, pluginId);
-
-        getLogger().info("BasicEconomy has been enabled.");
+        getLogger().info("[BasicEconomy] Active hooks: MiniPlaceholders=" + MiniPlaceholdersHook.isAvailable()
+                + ", SCChat=" + SCChatHook.isAvailable()
+                + ", PlaceholderAPI=" + getServer().getPluginManager().isPluginEnabled("PlaceholderAPI")
+                + ", Vault=" + (vaultEconomy != null));
     }
 
     @Override
@@ -129,6 +151,7 @@ public class BasicEconomyPlugin extends JavaPlugin implements Listener {
             configManager.setConfig(getConfig());
             configManager.load();
         }
+        setupHooks();
         try {
             storage.disconnect();
             if (configManager.getStorageType().equals("MONGODB")) {
@@ -141,6 +164,7 @@ public class BasicEconomyPlugin extends JavaPlugin implements Listener {
                 accountManager.setStorage(storage);
                 accountManager.initSync();
                 accountManager.repairOnStartup();
+                accountManager.refreshBaltopCache();
             }
         } catch (Exception e) {
             e.printStackTrace();

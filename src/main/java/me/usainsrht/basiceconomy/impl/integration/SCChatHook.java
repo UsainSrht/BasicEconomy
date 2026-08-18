@@ -10,35 +10,40 @@ import java.util.concurrent.CompletableFuture;
 
 public class SCChatHook {
 
-    private static Boolean available = null;
-
     public static boolean isAvailable() {
-        if (available == null) {
-            Plugin plugin = Bukkit.getPluginManager().getPlugin("SCChat");
-            available = plugin != null && plugin.isEnabled();
-        }
-        return available;
+        Plugin plugin = Bukkit.getPluginManager().getPlugin("SCChat");
+        return plugin != null && plugin.isEnabled();
     }
 
     public static void refreshAvailability() {
-        Plugin plugin = Bukkit.getPluginManager().getPlugin("SCChat");
-        available = plugin != null && plugin.isEnabled();
+        // dynamic check via isAvailable()
     }
 
     /**
-     * Asynchronously fetches the SCChat display name for an offline player.
+     * Asynchronously fetches the SCChat display name for any player (online or offline).
      * Returns a future that completes with the Component, or null if SCChat is
      * unavailable or an error occurs.
      */
     public static CompletableFuture<Component> getDisplayNameAsync(OfflinePlayer player) {
-        if (!isAvailable() || player == null) {
+        if (player == null) {
+            return CompletableFuture.completedFuture(null);
+        }
+        if (!isAvailable()) {
             return CompletableFuture.completedFuture(null);
         }
         try {
             return SCChat.getInstance().getChatManager().getDisplayName(player)
-                    .exceptionally(ex -> null);
+                    .handle((comp, ex) -> {
+                        if (ex != null) {
+                            Bukkit.getLogger().warning("[BasicEconomy Debug] SCChat getDisplayName failed for " + player.getName() + ": " + ex.getMessage());
+                            return null;
+                        }
+                        return comp;
+                    });
         } catch (Throwable e) {
+            Bukkit.getLogger().warning("[BasicEconomy Debug] SCChat getDisplayName threw exception: " + e.getMessage());
             return CompletableFuture.completedFuture(null);
         }
     }
 }
+

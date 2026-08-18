@@ -43,6 +43,10 @@ public class ConfigManager {
         return config.getString("player-format", "<scchatuser_displayname>");
     }
 
+    public boolean isDebug() {
+        return config.getBoolean("debug", false);
+    }
+
     public void load() {
         currencies.clear();
         messages.clear();
@@ -113,11 +117,10 @@ public class ConfigManager {
     public Component parse(String text, Audience audience) {
         TagResolver.Builder builder = TagResolver.builder();
         if (MiniPlaceholdersHook.isAvailable()) {
-            if (audience != null) {
-                builder.resolver(MiniPlaceholdersHook.getAudienceGlobalPlaceholders());
-            } else {
-                builder.resolver(MiniPlaceholdersHook.getGlobalPlaceholders());
-            }
+            builder.resolver(MiniPlaceholdersHook.getAudienceGlobalPlaceholders());
+        }
+        if (audience instanceof net.kyori.adventure.pointer.Pointered pointered) {
+            return MiniMessage.miniMessage().deserialize(text, pointered, builder.build());
         }
         return MiniMessage.miniMessage().deserialize(text, builder.build());
     }
@@ -146,11 +149,7 @@ public class ConfigManager {
         TagResolver.Builder builder = TagResolver.builder();
 
         if (MiniPlaceholdersHook.isAvailable()) {
-            if (audience != null) {
-                builder.resolver(MiniPlaceholdersHook.getAudienceGlobalPlaceholders());
-            } else {
-                builder.resolver(MiniPlaceholdersHook.getGlobalPlaceholders());
-            }
+            builder.resolver(MiniPlaceholdersHook.getAudienceGlobalPlaceholders());
         }
 
         for (int i = 0; i < placeholders.length; i += 2) {
@@ -166,7 +165,12 @@ public class ConfigManager {
         }
 
         TagResolver resolver = builder.build();
-        Component msgComp = MiniMessage.miniMessage().deserialize(rawMsg, resolver);
+        Component msgComp;
+        if (audience instanceof net.kyori.adventure.pointer.Pointered pointered) {
+            msgComp = MiniMessage.miniMessage().deserialize(rawMsg, pointered, resolver);
+        } else {
+            msgComp = MiniMessage.miniMessage().deserialize(rawMsg, resolver);
+        }
 
         if (!showPrefix) {
             return msgComp;
@@ -174,7 +178,9 @@ public class ConfigManager {
 
         Component prefixComp = rawPrefix.isEmpty()
                 ? Component.empty()
-                : MiniMessage.miniMessage().deserialize(rawPrefix, resolver);
+                : (audience instanceof net.kyori.adventure.pointer.Pointered pointered
+                    ? MiniMessage.miniMessage().deserialize(rawPrefix, pointered, resolver)
+                    : MiniMessage.miniMessage().deserialize(rawPrefix, resolver));
 
         return prefixComp.append(msgComp);
     }

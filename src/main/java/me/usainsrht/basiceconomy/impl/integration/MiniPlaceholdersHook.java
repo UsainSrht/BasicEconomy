@@ -7,25 +7,28 @@ import org.bukkit.plugin.Plugin;
 
 public class MiniPlaceholdersHook {
 
-    private static Boolean available = null;
-
     public static boolean isAvailable() {
-        if (available == null) {
-            Plugin plugin = Bukkit.getPluginManager().getPlugin("MiniPlaceholders");
-            available = plugin != null && plugin.isEnabled();
-        }
-        return available;
+        Plugin plugin = Bukkit.getPluginManager().getPlugin("MiniPlaceholders");
+        return plugin != null && plugin.isEnabled();
     }
 
     public static void refreshAvailability() {
-        Plugin plugin = Bukkit.getPluginManager().getPlugin("MiniPlaceholders");
-        available = plugin != null && plugin.isEnabled();
+        // dynamic check via isAvailable()
     }
 
     public static TagResolver getGlobalPlaceholders() {
         if (isAvailable()) {
             try {
                 return MiniPlaceholders.globalPlaceholders();
+            } catch (Throwable ignored) {}
+        }
+        return TagResolver.empty();
+    }
+
+    public static TagResolver getAudiencePlaceholders() {
+        if (isAvailable()) {
+            try {
+                return MiniPlaceholders.audiencePlaceholders();
             } catch (Throwable ignored) {}
         }
         return TagResolver.empty();
@@ -39,4 +42,24 @@ public class MiniPlaceholdersHook {
         }
         return TagResolver.empty();
     }
+
+    public static TagResolver getRelationalPlaceholders() {
+        if (isAvailable()) {
+            try {
+                return MiniPlaceholders.relationalPlaceholders();
+            } catch (Throwable ignored) {}
+        }
+        return TagResolver.empty();
+    }
+
+    public static TagResolver getRelationalGlobalPlaceholders() {
+        if (isAvailable()) {
+            try {
+                return MiniPlaceholders.relationalGlobalPlaceholders();
+            } catch (Throwable ignored) {}
+        }
+        return TagResolver.empty();
+    }
 }
+
+

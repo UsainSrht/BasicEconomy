@@ -10,6 +10,7 @@ import me.usainsrht.basiceconomy.impl.sync.SyncProvider;
 import me.usainsrht.basiceconomy.impl.sync.PluginMessageSyncProvider;
 import me.usainsrht.basiceconomy.impl.sync.RedisSyncProvider;
 import org.bukkit.Bukkit;
+import org.bukkit.OfflinePlayer;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.math.BigDecimal;
@@ -110,15 +111,29 @@ public class AccountManagerImpl implements EconomyManager {
         for (Currency currency : config.getCurrencies().values()) {
             if (currency.baltopEnabled()) {
                 storage.getTopBalances(currency, fetchLimit).thenAccept(top -> {
-                    List<BaltopEntry> entries = new ArrayList<>();
+                    List<Map.Entry<UUID, BigDecimal>> visibleTop = new ArrayList<>();
                     for (Map.Entry<UUID, BigDecimal> entry : top) {
-                        if (hidden.contains(entry.getKey())) continue;
-                        org.bukkit.OfflinePlayer op = Bukkit.getOfflinePlayer(entry.getKey());
-                        net.kyori.adventure.text.Component display = playerFormatter.formatPlayer(op);
-                        String rawName = op.getName() != null ? op.getName() : "Unknown";
-                        entries.add(new BaltopEntry(entry.getKey(), entry.getValue(), display, rawName));
+                        if (!hidden.contains(entry.getKey())) {
+                            visibleTop.add(entry);
+                        }
                     }
-                    baltopCache.put(currency, entries);
+
+                    List<CompletableFuture<BaltopEntry>> futures = new ArrayList<>();
+                    for (Map.Entry<UUID, BigDecimal> entry : visibleTop) {
+                        OfflinePlayer op = Bukkit.getOfflinePlayer(entry.getKey());
+                        String rawName = op.getName() != null ? op.getName() : "Unknown";
+                        CompletableFuture<BaltopEntry> future = playerFormatter.formatPlayerAsync(op)
+                                .thenApply(display -> new BaltopEntry(entry.getKey(), entry.getValue(), display, rawName));
+                        futures.add(future);
+                    }
+
+                    CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).thenAccept(v -> {
+                        List<BaltopEntry> entries = new ArrayList<>();
+                        for (CompletableFuture<BaltopEntry> f : futures) {
+                            entries.add(f.join());
+                        }
+                        baltopCache.put(currency, entries);
+                    });
                 });
             }
         }
