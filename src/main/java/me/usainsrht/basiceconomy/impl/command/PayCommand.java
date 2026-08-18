@@ -46,12 +46,7 @@ public class PayCommand {
         boolean singleCurrency = config.getCurrencies().size() <= 1;
 
         RequiredArgumentBuilder<CommandSourceStack, String> targetNode = Commands.argument("target", StringArgumentType.word())
-                .suggests((ctx, builder) -> {
-                    CommandSender sender = ctx.getSource().getSender();
-                    boolean hasOfflinePay = sender.hasPermission(config.getPayOfflinePermission())
-                            || sender.hasPermission(config.getOthersOfflinePermission());
-                    return CommandHelper.suggestPlayers(sender, accountManager, builder, hasOfflinePay);
-                });
+                .suggests((ctx, builder) -> CommandHelper.suggestPlayers(ctx.getSource().getSender(), accountManager, builder, false));
 
         RequiredArgumentBuilder<CommandSourceStack, Double> amountNode = Commands.argument("amount", DoubleArgumentType.doubleArg(0.01));
         amountNode.executes(ctx -> execute(ctx, null));
