@@ -35,13 +35,15 @@ public class SCChatHook {
             return SCChat.getInstance().getChatManager().getDisplayName(player)
                     .handle((comp, ex) -> {
                         if (ex != null) {
-                            Bukkit.getLogger().warning("[BasicEconomy Debug] SCChat getDisplayName failed for " + player.getName() + ": " + ex.getMessage());
+                            String name = player.getName() != null ? player.getName() : player.getUniqueId().toString();
+                            Bukkit.getLogger().warning("[BasicEconomy Debug] SCChat getDisplayName failed for " + name + ": " + ex.getClass().getSimpleName() + (ex.getMessage() != null ? " (" + ex.getMessage() + ")" : ""));
                             return null;
                         }
                         return comp;
                     });
         } catch (Throwable e) {
-            Bukkit.getLogger().warning("[BasicEconomy Debug] SCChat getDisplayName threw exception: " + e.getMessage());
+            String name = player.getName() != null ? player.getName() : player.getUniqueId().toString();
+            Bukkit.getLogger().warning("[BasicEconomy Debug] SCChat getDisplayName threw exception for " + name + ": " + e.getClass().getSimpleName() + (e.getMessage() != null ? " (" + e.getMessage() + ")" : ""));
             return CompletableFuture.completedFuture(null);
         }
     }

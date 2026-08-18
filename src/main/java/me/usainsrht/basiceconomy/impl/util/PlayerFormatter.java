@@ -44,7 +44,8 @@ public class PlayerFormatter {
         }
 
         boolean isOnline = offlinePlayer.isOnline() && offlinePlayer.getPlayer() != null;
-        debug("formatPlayerAsync called for " + offlinePlayer.getName() + " (UUID: " + offlinePlayer.getUniqueId() + ", online=" + isOnline + ")");
+        String playerName = offlinePlayer.getName() != null ? offlinePlayer.getName() : offlinePlayer.getUniqueId().toString();
+        debug("formatPlayerAsync called for " + playerName + " (UUID: " + offlinePlayer.getUniqueId() + ", online=" + isOnline + ")");
 
         if (isOnline) {
             Player player = offlinePlayer.getPlayer();
@@ -61,15 +62,15 @@ public class PlayerFormatter {
         }
 
         if (SCChatHook.isAvailable()) {
-            debug("SCChat is available, fetching async display name for offline player " + offlinePlayer.getName());
+            debug("SCChat is available, fetching async display name for offline player " + playerName);
             return SCChatHook.getDisplayNameAsync(offlinePlayer)
                     .thenApply(scchatDisplay -> {
-                        debug("SCChat async display name for offline " + offlinePlayer.getName() + ": " + (scchatDisplay != null ? PlainTextComponentSerializer.plainText().serialize(scchatDisplay) : "null"));
+                        debug("SCChat async display name for offline " + playerName + ": " + (scchatDisplay != null ? PlainTextComponentSerializer.plainText().serialize(scchatDisplay) : "null"));
                         return buildOfflineComponent(offlinePlayer, scchatDisplay);
                     });
         }
 
-        debug("SCChat is not available for offline player " + offlinePlayer.getName());
+        debug("SCChat is not available for offline player " + playerName);
         return CompletableFuture.completedFuture(buildOfflineComponent(offlinePlayer, null));
     }
 
