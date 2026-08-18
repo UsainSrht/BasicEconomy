@@ -227,15 +227,15 @@ public class EconomyCommand {
                 return;
             }
 
-            Component targetDisplay = playerFormatter.formatPlayer(target);
-            accountManager.getAccount(target.getUniqueId()).thenAccept(account -> {
-                BigDecimal bal = account.getBalance(currency);
-                Bukkit.getGlobalRegionScheduler().run(plugin, task ->
-                        sender.sendMessage(config.getMessage(sender, "balance_other",
-                                "player", targetDisplay,
-                                "amount", currency.format(bal)))
-                );
-            });
+            playerFormatter.formatPlayerAsync(target).thenAccept(targetDisplay ->
+                    accountManager.getAccount(target.getUniqueId()).thenAccept(account -> {
+                        BigDecimal bal = account.getBalance(currency);
+                        Bukkit.getGlobalRegionScheduler().run(plugin, task ->
+                                sender.sendMessage(config.getMessage(sender, "balance_other",
+                                        "player", targetDisplay,
+                                        "amount", currency.format(bal)))
+                        );
+                    }));
         });
 
         return Command.SINGLE_SUCCESS;
@@ -261,33 +261,33 @@ public class EconomyCommand {
                 return;
             }
 
-            Component targetDisplay = playerFormatter.formatPlayer(target);
-            accountManager.getAccount(target.getUniqueId()).thenAccept(account -> {
-                CompletableFuture<Boolean> future;
-                String msgKey;
-                if (action.equals("set")) {
-                    future = account.setBalance(currency, bdAmount);
-                    msgKey = "set_success";
-                } else if (action.equals("add")) {
-                    future = account.addBalance(currency, bdAmount);
-                    msgKey = "add_success";
-                } else {
-                    future = account.removeBalance(currency, bdAmount);
-                    msgKey = "remove_success";
-                }
-
-                future.thenAccept(success -> {
-                    Bukkit.getGlobalRegionScheduler().run(plugin, task -> {
-                        if (success) {
-                            sender.sendMessage(config.getMessage(sender, msgKey,
-                                    "player", targetDisplay,
-                                    "amount", currency.format(bdAmount)));
+            playerFormatter.formatPlayerAsync(target).thenAccept(targetDisplay ->
+                    accountManager.getAccount(target.getUniqueId()).thenAccept(account -> {
+                        CompletableFuture<Boolean> future;
+                        String msgKey;
+                        if (action.equals("set")) {
+                            future = account.setBalance(currency, bdAmount);
+                            msgKey = "set_success";
+                        } else if (action.equals("add")) {
+                            future = account.addBalance(currency, bdAmount);
+                            msgKey = "add_success";
                         } else {
-                            sender.sendMessage(config.getMessage(sender, "invalid_amount"));
+                            future = account.removeBalance(currency, bdAmount);
+                            msgKey = "remove_success";
                         }
-                    });
-                });
-            });
+
+                        future.thenAccept(success -> {
+                            Bukkit.getGlobalRegionScheduler().run(plugin, task -> {
+                                if (success) {
+                                    sender.sendMessage(config.getMessage(sender, msgKey,
+                                            "player", targetDisplay,
+                                            "amount", currency.format(bdAmount)));
+                                } else {
+                                    sender.sendMessage(config.getMessage(sender, "invalid_amount"));
+                                }
+                            });
+                        });
+                    }));
         });
 
         return Command.SINGLE_SUCCESS;

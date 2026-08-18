@@ -1,10 +1,12 @@
 package me.usainsrht.basiceconomy.impl.integration;
 
-import me.usainsrht.scchat.api.SCChatAPI;
+import me.usainsrht.scchat.SCChat;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.plugin.Plugin;
+
+import java.util.concurrent.CompletableFuture;
 
 public class SCChatHook {
 
@@ -23,14 +25,20 @@ public class SCChatHook {
         available = plugin != null && plugin.isEnabled();
     }
 
-    public static Component getOfflineDisplayName(OfflinePlayer player) {
+    /**
+     * Asynchronously fetches the SCChat display name for an offline player.
+     * Returns a future that completes with the Component, or null if SCChat is
+     * unavailable or an error occurs.
+     */
+    public static CompletableFuture<Component> getDisplayNameAsync(OfflinePlayer player) {
         if (!isAvailable() || player == null) {
-            return null;
+            return CompletableFuture.completedFuture(null);
         }
         try {
-            return SCChatAPI.getDisplayName(player);
+            return SCChat.getInstance().getChatManager().getDisplayName(player)
+                    .exceptionally(ex -> null);
         } catch (Throwable e) {
-            return null;
+            return CompletableFuture.completedFuture(null);
         }
     }
 }

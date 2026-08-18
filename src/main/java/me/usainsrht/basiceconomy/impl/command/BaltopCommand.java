@@ -19,6 +19,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
 
 public class BaltopCommand {
@@ -115,16 +116,26 @@ public class BaltopCommand {
         } else {
             int cacheLimit = config.getBaltopCacheLimit();
             accountManager.getTopAccounts(currency, cacheLimit).thenAccept(top -> {
-                Bukkit.getGlobalRegionScheduler().run(plugin, task -> {
-                    List<AccountManagerImpl.BaltopEntry> entries = new ArrayList<>();
-                    for (var entry : top) {
-                        OfflinePlayer op = Bukkit.getOfflinePlayer(entry.getKey());
-                        net.kyori.adventure.text.Component display = playerFormatter.formatPlayer(op);
-                        String rawName = op.getName() != null ? op.getName() : "Unknown";
-                        entries.add(new AccountManagerImpl.BaltopEntry(entry.getKey(), entry.getValue(), display, rawName));
-                    }
-                    sendBaltopPage(sender, currency, entries, page, displayTop);
-                });
+                List<CompletableFuture<AccountManagerImpl.BaltopEntry>> futures = new ArrayList<>();
+                for (var entry : top) {
+                    OfflinePlayer op = Bukkit.getOfflinePlayer(entry.getKey());
+                    String rawName = op.getName() != null ? op.getName() : "Unknown";
+                    CompletableFuture<AccountManagerImpl.BaltopEntry> future =
+                            playerFormatter.formatPlayerAsync(op)
+                                    .thenApply(display ->
+                                            new AccountManagerImpl.BaltopEntry(
+                                                    entry.getKey(), entry.getValue(), display, rawName));
+                    futures.add(future);
+                }
+                CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]))
+                        .thenAccept(ignored -> {
+                            List<AccountManagerImpl.BaltopEntry> entries = new ArrayList<>();
+                            for (CompletableFuture<AccountManagerImpl.BaltopEntry> f : futures) {
+                                entries.add(f.join());
+                            }
+                            Bukkit.getGlobalRegionScheduler().run(plugin, task ->
+                                    sendBaltopPage(sender, currency, entries, page, displayTop));
+                        });
             });
         }
 

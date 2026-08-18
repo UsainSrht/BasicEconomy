@@ -21,6 +21,15 @@ public class PlayerFormatter {
         this.config = config;
     }
 
+    /**
+     * Formats a player asynchronously.
+     * <ul>
+     *   <li>Online players are resolved immediately on the calling thread.</li>
+     *   <li>Offline players fetch the SCChat display-name via its async API before
+     *       building the Component, so the result is always accurate even when the
+     *       player has never joined during this server session.</li>
+     * </ul>
+     */
     public CompletableFuture<Component> formatPlayerAsync(OfflinePlayer offlinePlayer) {
         if (offlinePlayer == null) {
             return CompletableFuture.completedFuture(Component.text("Unknown"));
@@ -30,9 +39,23 @@ public class PlayerFormatter {
             return CompletableFuture.completedFuture(formatOnlinePlayer(offlinePlayer.getPlayer()));
         }
 
-        return CompletableFuture.supplyAsync(() -> formatOfflinePlayerSync(offlinePlayer));
+        String format = config.getPlayerFormat();
+        boolean needsScchat = format.toLowerCase().contains("scchatuser_displayname")
+                && SCChatHook.isAvailable();
+
+        if (needsScchat) {
+            return SCChatHook.getDisplayNameAsync(offlinePlayer)
+                    .thenApply(scchatDisplay -> buildOfflineComponent(offlinePlayer, scchatDisplay));
+        }
+
+        return CompletableFuture.completedFuture(buildOfflineComponent(offlinePlayer, null));
     }
 
+    /**
+     * Synchronous convenience variant – used where blocking is acceptable (e.g.
+     * commands that are already running off the main thread and don't need the
+     * SCChat display name). For baltop / pay prefer {@link #formatPlayerAsync}.
+     */
     public Component formatPlayer(OfflinePlayer offlinePlayer) {
         if (offlinePlayer == null) {
             return Component.text("Unknown");
@@ -42,7 +65,7 @@ public class PlayerFormatter {
             return formatOnlinePlayer(offlinePlayer.getPlayer());
         }
 
-        return formatOfflinePlayerSync(offlinePlayer);
+        return buildOfflineComponent(offlinePlayer, null);
     }
 
     public Component formatOnlinePlayer(Player player) {
@@ -64,16 +87,9 @@ public class PlayerFormatter {
         return MiniMessage.miniMessage().deserialize(format, resolverBuilder.build());
     }
 
-    private Component formatOfflinePlayerSync(OfflinePlayer offlinePlayer) {
+    private Component buildOfflineComponent(OfflinePlayer offlinePlayer, Component scchatDisplayName) {
         String format = config.getPlayerFormat();
         String fallbackName = offlinePlayer.getName() != null ? offlinePlayer.getName() : "Unknown";
-
-        Component scchatDisplayName = null;
-        if (format.toLowerCase().contains("scchatuser_displayname") && SCChatHook.isAvailable()) {
-            try {
-                scchatDisplayName = SCChatHook.getOfflineDisplayName(offlinePlayer);
-            } catch (Throwable ignored) {}
-        }
 
         TagResolver.Builder resolverBuilder = TagResolver.builder();
 

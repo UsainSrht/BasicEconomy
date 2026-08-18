@@ -19,6 +19,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.math.BigDecimal;
+import java.util.concurrent.CompletableFuture;
 
 public class PayCommand {
 
@@ -122,17 +123,21 @@ public class PayCommand {
                     accountManager.getAccount(target.getUniqueId()).thenAccept(targetAcc -> {
                         targetAcc.addBalance(currency, bdAmount).thenAccept(added -> {
                             if (added) {
-                                Component targetDisplay = playerFormatter.formatPlayer(target);
-                                Component senderDisplay = playerFormatter.formatPlayer(sender);
-                                Bukkit.getGlobalRegionScheduler().run(plugin, task -> {
-                                    sender.sendMessage(config.getMessage(sender, "pay_success",
-                                            "player", targetDisplay,
-                                            "amount", currency.format(bdAmount)));
-                                    if (target.isOnline() && target.getPlayer() != null) {
-                                        target.getPlayer().sendMessage(config.getMessage(target.getPlayer(), "pay_received",
-                                                "player", senderDisplay,
+                                CompletableFuture<Component> targetDisplayFuture = playerFormatter.formatPlayerAsync(target);
+                                CompletableFuture<Component> senderDisplayFuture = playerFormatter.formatPlayerAsync(sender);
+                                CompletableFuture.allOf(targetDisplayFuture, senderDisplayFuture).thenAccept(ignored -> {
+                                    Component targetDisplay = targetDisplayFuture.join();
+                                    Component senderDisplay = senderDisplayFuture.join();
+                                    Bukkit.getGlobalRegionScheduler().run(plugin, task -> {
+                                        sender.sendMessage(config.getMessage(sender, "pay_success",
+                                                "player", targetDisplay,
                                                 "amount", currency.format(bdAmount)));
-                                    }
+                                        if (target.isOnline() && target.getPlayer() != null) {
+                                            target.getPlayer().sendMessage(config.getMessage(target.getPlayer(), "pay_received",
+                                                    "player", senderDisplay,
+                                                    "amount", currency.format(bdAmount)));
+                                        }
+                                    });
                                 });
                             } else {
                                 senderAcc.addBalance(currency, bdAmount);
