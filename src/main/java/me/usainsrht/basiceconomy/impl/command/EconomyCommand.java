@@ -191,9 +191,14 @@ public class EconomyCommand {
         }
         accountManager.getAccount(player.getUniqueId()).thenAccept(account -> {
             BigDecimal bal = account.getBalance(currency);
-            Bukkit.getGlobalRegionScheduler().run(plugin, task ->
-                    player.sendMessage(config.getMessage(player, "balance_self", "amount", currency.format(bal)))
-            );
+            playerFormatter.formatPlayerAsync(player).thenAccept(playerDisplay -> {
+                Bukkit.getGlobalRegionScheduler().run(plugin, task ->
+                        player.sendMessage(config.getMessage(player, "balance_self",
+                                "player", playerDisplay,
+                                "amount", currency.format(bal),
+                                "currency", currency))
+                );
+            });
         });
         return Command.SINGLE_SUCCESS;
     }
@@ -206,7 +211,7 @@ public class EconomyCommand {
         String currName = StringArgumentType.getString(ctx, "currency");
         Currency currency = accountManager.getCurrency(currName);
         if (currency == null) {
-            ctx.getSource().getSender().sendMessage(config.getMessage(ctx.getSource().getSender(), "currency_not_found"));
+            ctx.getSource().getSender().sendMessage(config.getMessage(ctx.getSource().getSender(), "currency_not_found", "currency", currName));
             return 0;
         }
         return executeOther(ctx, currency);
@@ -222,7 +227,7 @@ public class EconomyCommand {
         CommandHelper.resolvePlayerAsync(sender, targetName, hasOthersOffline).thenAccept(target -> {
             if (target == null) {
                 Bukkit.getGlobalRegionScheduler().run(plugin, task ->
-                        sender.sendMessage(config.getMessage(sender, "player_not_found"))
+                        sender.sendMessage(config.getMessage(sender, "player_not_found", "player", targetName))
                 );
                 return;
             }
@@ -233,7 +238,8 @@ public class EconomyCommand {
                         Bukkit.getGlobalRegionScheduler().run(plugin, task ->
                                 sender.sendMessage(config.getMessage(sender, "balance_other",
                                         "player", targetDisplay,
-                                        "amount", currency.format(bal)))
+                                        "amount", currency.format(bal),
+                                        "currency", currency))
                         );
                     }));
         });
@@ -245,7 +251,7 @@ public class EconomyCommand {
         CommandSender sender = ctx.getSource().getSender();
         Currency currency = currName != null ? accountManager.getCurrency(currName) : accountManager.getDefaultCurrency();
         if (currency == null) {
-            sender.sendMessage(config.getMessage(sender, "currency_not_found"));
+            sender.sendMessage(config.getMessage(sender, "currency_not_found", "currency", currName != null ? currName : ""));
             return 0;
         }
 
@@ -256,7 +262,7 @@ public class EconomyCommand {
         CommandHelper.resolvePlayerAsync(sender, targetName, true).thenAccept(target -> {
             if (target == null) {
                 Bukkit.getGlobalRegionScheduler().run(plugin, task ->
-                        sender.sendMessage(config.getMessage(sender, "player_not_found"))
+                        sender.sendMessage(config.getMessage(sender, "player_not_found", "player", targetName))
                 );
                 return;
             }
@@ -281,9 +287,13 @@ public class EconomyCommand {
                                 if (success) {
                                     sender.sendMessage(config.getMessage(sender, msgKey,
                                             "player", targetDisplay,
-                                            "amount", currency.format(bdAmount)));
+                                            "amount", currency.format(bdAmount),
+                                            "currency", currency));
                                 } else {
-                                    sender.sendMessage(config.getMessage(sender, "invalid_amount"));
+                                    sender.sendMessage(config.getMessage(sender, "invalid_amount",
+                                            "player", targetDisplay,
+                                            "amount", currency.format(bdAmount),
+                                            "currency", currency));
                                 }
                             });
                         });

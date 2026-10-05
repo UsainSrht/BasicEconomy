@@ -99,12 +99,12 @@ public class BaltopCommand {
         Currency currency = currName != null ? accountManager.getCurrency(currName) : accountManager.getDefaultCurrency();
 
         if (currency == null) {
-            sender.sendMessage(config.getMessage(sender, "currency_not_found"));
+            sender.sendMessage(config.getMessage(sender, "currency_not_found", "currency", currName != null ? currName : ""));
             return 0;
         }
 
         if (!currency.baltopEnabled()) {
-            sender.sendMessage(config.getMessage(sender, "baltop_disabled"));
+            sender.sendMessage(config.getMessage(sender, "baltop_disabled", "currency", currency));
             return 0;
         }
 
@@ -122,7 +122,7 @@ public class BaltopCommand {
                     String rawName = op.getName() != null ? op.getName() : "Unknown";
                     CompletableFuture<AccountManagerImpl.BaltopEntry> future =
                             playerFormatter.formatPlayerAsync(op)
-                                    .thenApply(display ->
+                                     .thenApply(display ->
                                             new AccountManagerImpl.BaltopEntry(
                                                     entry.getKey(), entry.getValue(), display, rawName));
                     futures.add(future);
@@ -151,7 +151,7 @@ public class BaltopCommand {
         int endIndex = Math.min(startIndex + displayTop, totalItems);
 
         sender.sendMessage(config.getMessage(sender, "baltop_header",
-                "currency", currency.name(),
+                "currency", currency,
                 "page", String.valueOf(targetPage),
                 "max_pages", String.valueOf(totalPages)));
 
@@ -161,14 +161,15 @@ public class BaltopCommand {
             sender.sendMessage(config.getMessage(sender, "baltop_entry",
                     "position", String.valueOf(pos),
                     "player", entry.getPlayerDisplay(),
-                    "amount", currency.format(entry.getBalance())));
+                    "amount", currency.format(entry.getBalance()),
+                    "currency", currency));
         }
 
         if (sender instanceof Player player) {
             String playerPos = accountManager.getPlayerPosition(player.getUniqueId(), currency);
             sender.sendMessage(config.getMessage(sender, "baltop_footer",
                     "position", playerPos,
-                    "currency", currency.name()));
+                    "currency", currency));
         }
     }
 
@@ -187,7 +188,7 @@ public class BaltopCommand {
         CommandHelper.resolvePlayerAsync(sender, targetName, true).thenAccept(target -> {
             if (target == null) {
                 Bukkit.getGlobalRegionScheduler().run(plugin, task ->
-                        sender.sendMessage(config.getMessage(sender, "player_not_found")));
+                        sender.sendMessage(config.getMessage(sender, "player_not_found", "player", targetName)));
                 return;
             }
 

@@ -8,6 +8,7 @@ import org.bukkit.plugin.Plugin;
 public class MiniPlaceholdersHook {
 
     public static boolean isAvailable() {
+        if (Bukkit.getServer() == null) return false;
         Plugin plugin = Bukkit.getPluginManager().getPlugin("MiniPlaceholders");
         return plugin != null && plugin.isEnabled();
     }

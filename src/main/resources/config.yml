@@ -119,6 +119,9 @@ commands:
 
 # Currencies
 default-currency: "coins"
+# Optional global compact formatting defaults (can be overridden per currency):
+# compact_format: "#.##{suffix}"
+# compact_suffixes: ["k", "m", "b", "t", "q"]
 currencies:
   coins:
     name: "coins"
@@ -127,6 +130,16 @@ currencies:
     symbol: "<gold>⛃</gold>"
     default_format: "#,##0.00"
     compact_formatting: true
+    # Compact format pattern. Example: "#.##{suffix}" or "#.## {suffix}" for a space between number and suffix.
+    # Also supports "{amount} {suffix}" or "{value} {suffix}".
+    compact_format: "#.##{suffix}"
+    # Short currency suffixes. Supports a list of strings or comma-separated string (e.g. "k, m, b, t, q" or "K, M, B, T, Q")
+    compact_suffixes:
+      - "k"
+      - "m"
+      - "b"
+      - "t"
+      - "q"
     pay_enabled: true
     baltop_enabled: true
     min_value: 0.0
@@ -138,6 +151,13 @@ currencies:
     symbol: "<green>♦</green>"
     default_format: "#,##0"
     compact_formatting: true
+    compact_format: "#.##{suffix}"
+    compact_suffixes:
+      - "k"
+      - "m"
+      - "b"
+      - "t"
+      - "q"
     pay_enabled: false
     baltop_enabled: true
     min_value: 0.0
@@ -151,6 +171,20 @@ debug: false
 player-format: "<scchatuser_displayname>"
 
 # Messages
+# All messages support MiniMessage formatting and MiniPlaceholders (if installed).
+# Common placeholders available where applicable:
+#   <currency> - Currency name/identifier (e.g. coins)
+#   <currency_name> - Currency name/identifier (alias for <currency>)
+#   <currency_display> - Currency display name component (e.g. Coins)
+#   <currency_plural> - Currency plural display name component
+#   <currency_symbol> - Currency symbol component (e.g. ⛃)
+#   <player> - Target/source player display or name
+#   <amount> - Formatted currency amount
+# Specific placeholders:
+#   not_enough_money: <amount> (needed amount), <balance> (player current balance), <currency>
+#   baltop_header: <currency>, <page>, <max_pages>
+#   baltop_entry:  <position>, <player>, <amount>, <currency>
+#   baltop_footer: <position>, <currency>
 messages:
   prefix: "<gray>[<gold>BasicEconomy</gold>] </gray>"
   no_permission: "<red>You do not have permission to do this.</red>"

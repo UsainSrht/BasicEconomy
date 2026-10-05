@@ -72,12 +72,12 @@ public class PayCommand {
 
         Currency currency = currName != null ? accountManager.getCurrency(currName) : accountManager.getDefaultCurrency();
         if (currency == null) {
-            sender.sendMessage(config.getMessage(sender, "currency_not_found"));
+            sender.sendMessage(config.getMessage(sender, "currency_not_found", "currency", currName != null ? currName : ""));
             return 0;
         }
 
         if (!currency.payEnabled()) {
-            sender.sendMessage(config.getMessage(sender, "pay_disabled"));
+            sender.sendMessage(config.getMessage(sender, "pay_disabled", "currency", currency));
             return 0;
         }
 
@@ -91,27 +91,34 @@ public class PayCommand {
         CommandHelper.resolvePlayerAsync(sender, targetName, hasOfflinePay).thenAccept(target -> {
             if (target == null) {
                 Bukkit.getGlobalRegionScheduler().run(plugin, task ->
-                        sender.sendMessage(config.getMessage(sender, "player_not_found")));
+                        sender.sendMessage(config.getMessage(sender, "player_not_found", "player", targetName)));
                 return;
             }
 
             if (sender.getUniqueId().equals(target.getUniqueId())) {
                 Bukkit.getGlobalRegionScheduler().run(plugin, task ->
-                        sender.sendMessage(config.getMessage(sender, "cannot_pay_self")));
+                        sender.sendMessage(config.getMessage(sender, "cannot_pay_self",
+                                "player", target.getName() != null ? target.getName() : targetName,
+                                "currency", currency)));
                 return;
             }
 
             accountManager.getAccount(sender.getUniqueId()).thenAccept(senderAcc -> {
                 if (senderAcc.getBalance(currency).compareTo(bdAmount) < 0) {
                     Bukkit.getGlobalRegionScheduler().run(plugin, task ->
-                            sender.sendMessage(config.getMessage(sender, "not_enough_money")));
+                            sender.sendMessage(config.getMessage(sender, "not_enough_money",
+                                    "amount", currency.format(bdAmount),
+                                    "balance", currency.format(senderAcc.getBalance(currency)),
+                                    "currency", currency)));
                     return;
                 }
 
                 senderAcc.removeBalance(currency, bdAmount).thenAccept(removed -> {
                     if (!removed) {
                         Bukkit.getGlobalRegionScheduler().run(plugin, task ->
-                                sender.sendMessage(config.getMessage(sender, "invalid_amount")));
+                                sender.sendMessage(config.getMessage(sender, "invalid_amount",
+                                        "amount", currency.format(bdAmount),
+                                        "currency", currency)));
                         return;
                     }
 
@@ -124,12 +131,14 @@ public class PayCommand {
                                     Bukkit.getGlobalRegionScheduler().run(plugin, task -> {
                                         sender.sendMessage(config.getMessage(sender, "pay_success",
                                                 "player", targetDisplay,
-                                                "amount", currency.format(bdAmount)));
+                                                "amount", currency.format(bdAmount),
+                                                "currency", currency));
                                         Player onlineTarget = target instanceof Player p ? p : (target.isOnline() ? target.getPlayer() : Bukkit.getPlayer(target.getUniqueId()));
                                         if (onlineTarget != null && onlineTarget.isOnline()) {
                                             onlineTarget.sendMessage(config.getMessage(onlineTarget, "pay_received",
                                                     "player", senderDisplay,
-                                                    "amount", currency.format(bdAmount)));
+                                                    "amount", currency.format(bdAmount),
+                                                    "currency", currency));
                                         }
                                     });
                                     return null;
@@ -138,12 +147,14 @@ public class PayCommand {
                                     Bukkit.getGlobalRegionScheduler().run(plugin, task -> {
                                         sender.sendMessage(config.getMessage(sender, "pay_success",
                                                 "player", Component.text(target.getName() != null ? target.getName() : "Unknown"),
-                                                "amount", currency.format(bdAmount)));
+                                                "amount", currency.format(bdAmount),
+                                                "currency", currency));
                                         Player onlineTarget = target instanceof Player p ? p : (target.isOnline() ? target.getPlayer() : Bukkit.getPlayer(target.getUniqueId()));
                                         if (onlineTarget != null && onlineTarget.isOnline()) {
                                             onlineTarget.sendMessage(config.getMessage(onlineTarget, "pay_received",
                                                     "player", Component.text(sender.getName()),
-                                                    "amount", currency.format(bdAmount)));
+                                                    "amount", currency.format(bdAmount),
+                                                    "currency", currency));
                                         }
                                     });
                                     return null;
@@ -151,20 +162,26 @@ public class PayCommand {
                             } else {
                                 senderAcc.addBalance(currency, bdAmount);
                                 Bukkit.getGlobalRegionScheduler().run(plugin, task ->
-                                        sender.sendMessage(config.getMessage(sender, "invalid_amount")));
+                                        sender.sendMessage(config.getMessage(sender, "invalid_amount",
+                                                "amount", currency.format(bdAmount),
+                                                "currency", currency)));
                             }
                         }).exceptionally(ex -> {
                             plugin.getLogger().severe("Error adding balance during pay: " + ex.getMessage());
                             senderAcc.addBalance(currency, bdAmount);
                             Bukkit.getGlobalRegionScheduler().run(plugin, task ->
-                                    sender.sendMessage(config.getMessage(sender, "invalid_amount")));
+                                    sender.sendMessage(config.getMessage(sender, "invalid_amount",
+                                            "amount", currency.format(bdAmount),
+                                            "currency", currency)));
                             return null;
                         });
                     }).exceptionally(ex -> {
                         plugin.getLogger().severe("Error loading target account during pay: " + ex.getMessage());
                         senderAcc.addBalance(currency, bdAmount);
                         Bukkit.getGlobalRegionScheduler().run(plugin, task ->
-                                sender.sendMessage(config.getMessage(sender, "invalid_amount")));
+                                sender.sendMessage(config.getMessage(sender, "invalid_amount",
+                                        "amount", currency.format(bdAmount),
+                                        "currency", currency)));
                         return null;
                     });
                 });

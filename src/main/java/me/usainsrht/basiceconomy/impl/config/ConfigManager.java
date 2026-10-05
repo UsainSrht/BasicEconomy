@@ -12,6 +12,7 @@ import org.bukkit.configuration.file.FileConfiguration;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -62,6 +63,9 @@ public class ConfigManager {
         }
 
         String firstLoadedCurrency = null;
+        String globalCompactFormat = config.getString("compact_format", "#.##{suffix}");
+        List<String> globalCompactSuffixes = parseSuffixes(config, "compact_suffixes", List.of("k", "m", "b", "t", "q"));
+
         ConfigurationSection currencySection = config.getConfigurationSection("currencies");
         if (currencySection != null) {
             for (String key : currencySection.getKeys(false)) {
@@ -75,6 +79,8 @@ public class ConfigManager {
                 Component symbol = parse(sec.getString("symbol", "$"));
                 String defaultFormat = sec.getString("default_format", "#,##0.00");
                 boolean compactFormatting = sec.getBoolean("compact_formatting", true);
+                String compactFormat = sec.getString("compact_format", globalCompactFormat);
+                List<String> compactSuffixes = parseSuffixes(sec, "compact_suffixes", globalCompactSuffixes);
                 boolean payEnabled = sec.getBoolean("pay_enabled", true);
                 boolean baltopEnabled = sec.getBoolean("baltop_enabled", true);
                 BigDecimal min = BigDecimal.valueOf(sec.getDouble("min_value", 0.0));
@@ -83,7 +89,8 @@ public class ConfigManager {
 
                 Currency currency = new Currency(
                         name, displayName, displayNamePlural, symbol, defaultFormat,
-                        compactFormatting, payEnabled, baltopEnabled, min, max, start);
+                        compactFormatting, compactFormat, compactSuffixes,
+                        payEnabled, baltopEnabled, min, max, start);
 
                 if (firstLoadedCurrency == null) {
                     firstLoadedCurrency = name;
@@ -156,10 +163,42 @@ public class ConfigManager {
             if (i + 1 < placeholders.length) {
                 String pKey = String.valueOf(placeholders[i]);
                 Object pVal = placeholders[i + 1];
-                if (pVal instanceof Component cVal) {
+                if (pVal instanceof Currency cur) {
+                    builder.resolver(Placeholder.parsed(pKey, cur.name()));
+                    builder.resolver(Placeholder.parsed("currency", cur.name()));
+                    builder.resolver(Placeholder.parsed("currency_name", cur.name()));
+                    if (cur.displayName() != null) {
+                        builder.resolver(Placeholder.component("currency_display", cur.displayName()));
+                    }
+                    if (cur.displayNamePlural() != null) {
+                        builder.resolver(Placeholder.component("currency_plural", cur.displayNamePlural()));
+                    }
+                    if (cur.symbol() != null) {
+                        builder.resolver(Placeholder.component("currency_symbol", cur.symbol()));
+                    }
+                } else if (pVal instanceof Component cVal) {
                     builder.resolver(Placeholder.component(pKey, cVal));
+                } else if (pVal instanceof org.bukkit.OfflinePlayer op) {
+                    String opName = op.getName() != null ? op.getName() : op.getUniqueId().toString();
+                    builder.resolver(Placeholder.parsed(pKey, opName));
                 } else if (pVal != null) {
-                    builder.resolver(Placeholder.parsed(pKey, String.valueOf(pVal)));
+                    String strVal = String.valueOf(pVal);
+                    builder.resolver(Placeholder.parsed(pKey, strVal));
+                    if (pKey.equals("currency")) {
+                        builder.resolver(Placeholder.parsed("currency_name", strVal));
+                        Currency cur = currencies.get(strVal.toLowerCase());
+                        if (cur != null) {
+                            if (cur.displayName() != null) {
+                                builder.resolver(Placeholder.component("currency_display", cur.displayName()));
+                            }
+                            if (cur.displayNamePlural() != null) {
+                                builder.resolver(Placeholder.component("currency_plural", cur.displayNamePlural()));
+                            }
+                            if (cur.symbol() != null) {
+                                builder.resolver(Placeholder.component("currency_symbol", cur.symbol()));
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -341,5 +380,21 @@ public class ConfigManager {
                 .sorted()
                 .collect(Collectors.toList());
         config.set("baltop-hidden-players", uuids);
+    }
+
+    private List<String> parseSuffixes(ConfigurationSection sec, String path, List<String> defaultSuffixes) {
+        if (sec.isList(path)) {
+            List<String> list = sec.getStringList(path);
+            return list.isEmpty() ? defaultSuffixes : list;
+        } else if (sec.isString(path)) {
+            String str = sec.getString(path);
+            if (str != null && !str.isBlank()) {
+                return Arrays.stream(str.split(","))
+                        .map(String::trim)
+                        .filter(s -> !s.isEmpty())
+                        .collect(Collectors.toList());
+            }
+        }
+        return defaultSuffixes;
     }
 }

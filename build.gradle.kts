@@ -32,6 +32,10 @@ dependencies {
     
     // HikariCP for SQL
     compileOnly("com.zaxxer:HikariCP:5.1.0")
+
+    testImplementation("io.papermc.paper:paper-api:1.20.6-R0.1-SNAPSHOT")
+    testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher:1.10.2")
 }
 
 java {
@@ -41,6 +45,10 @@ java {
 }
 
 tasks {
+    test {
+        useJUnitPlatform()
+    }
+
     processResources {
         val props = mapOf("version" to version, "project" to mapOf("version" to version))
         inputs.properties(props)
