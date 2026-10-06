@@ -37,15 +37,15 @@ public class CommandRegistry {
             List<String> payAliases = config.getCommandAliases("pay");
             commands.register(payCmd.build(payName).build(), "BasicEconomy pay command", payAliases);
 
-            EconomyCommand moneyCmd = new EconomyCommand(plugin, accountManager, config, playerFormatter, payCmd);
-            String moneyName = config.getCommandName("money");
-            List<String> moneyAliases = config.getCommandAliases("money");
-            commands.register(moneyCmd.build(moneyName).build(), "BasicEconomy main command", moneyAliases);
-
             BaltopCommand baltopCmd = new BaltopCommand(plugin, accountManager, config, playerFormatter);
             String baltopName = config.getCommandName("baltop");
             List<String> baltopAliases = config.getCommandAliases("baltop");
             commands.register(baltopCmd.build(baltopName).build(), "BasicEconomy baltop command", baltopAliases);
+
+            EconomyCommand moneyCmd = new EconomyCommand(plugin, accountManager, config, playerFormatter, payCmd, baltopCmd);
+            String moneyName = config.getCommandName("money");
+            List<String> moneyAliases = config.getCommandAliases("money");
+            commands.register(moneyCmd.build(moneyName).build(), "BasicEconomy main command", moneyAliases);
         });
     }
 }

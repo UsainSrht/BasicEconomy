@@ -3,6 +3,7 @@ package me.usainsrht.basiceconomy.impl.command;
 import com.destroystokyo.paper.event.brigadier.AsyncPlayerSendSuggestionsEvent;
 import com.mojang.brigadier.suggestion.Suggestion;
 import com.mojang.brigadier.suggestion.Suggestions;
+import me.usainsrht.basiceconomy.api.Currency;
 import me.usainsrht.basiceconomy.impl.config.ConfigManager;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -61,6 +62,25 @@ public class CommandSuggestionListener implements Listener {
                     filtered.add(suggestion);
                 }
                 event.setSuggestions(new Suggestions(original.getRange(), filtered));
+            }
+        } else if (parts.length == 3) {
+            // Filter subcommands under a currency (e.g., /money <currency> <subcommand>)
+            if (moneyLabels.stream().anyMatch(l -> l.equalsIgnoreCase(commandLabel))) {
+                String potentialCurrency = parts[1].toLowerCase();
+                Currency currency = config.getCurrencies().get(potentialCurrency);
+                if (currency != null) {
+                    Player player = event.getPlayer();
+                    Suggestions original = event.getSuggestions();
+                    List<Suggestion> filtered = new ArrayList<>();
+                    for (Suggestion suggestion : original.getList()) {
+                        String text = suggestion.getText();
+                        if (isDisallowedCurrencySubcommand(player, currency, text)) {
+                            continue;
+                        }
+                        filtered.add(suggestion);
+                    }
+                    event.setSuggestions(new Suggestions(original.getRange(), filtered));
+                }
             }
         }
     }
@@ -122,6 +142,44 @@ public class CommandSuggestionListener implements Listener {
             }
         }
 
+        // Top subcommand
+        Currency defaultCurrency = config.getDefaultCurrency();
+        if (matchesAnyCurrency(lower, defaultCurrency, "top")) {
+            if (defaultCurrency == null || !defaultCurrency.baltopEnabled()) {
+                return true;
+            }
+            String topPerm = config.getCurrencySubcommandPermission(
+                    defaultCurrency, "top", config.getCommandPermission("baltop"));
+            if (!player.hasPermission(topPerm)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private boolean isDisallowedCurrencySubcommand(Player player, Currency currency, String text) {
+        String lower = text.toLowerCase();
+        if (matchesAnyCurrency(lower, currency, "top")) {
+            if (currency == null || !currency.baltopEnabled()) {
+                return true;
+            }
+            String topPerm = config.getCurrencySubcommandPermission(
+                    currency, "top", config.getCommandPermission("baltop"));
+            if (!player.hasPermission(topPerm)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean matchesAnyCurrency(String input, Currency currency, String subKey) {
+        List<String> namesWithAliases = config.getCurrencySubcommandNamesWithAliases(currency, subKey);
+        for (String name : namesWithAliases) {
+            if (name.equalsIgnoreCase(input)) {
+                return true;
+            }
+        }
         return false;
     }
 

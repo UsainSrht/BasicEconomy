@@ -95,6 +95,11 @@ commands:
         name: "info"
         aliases: []
         permission: "basiceconomy.command.money.info"
+      top:
+        name: "top"
+        aliases:
+          - "baltop"
+        permission: "basiceconomy.command.baltop"
   pay:
     name: "pay"
     aliases: []
@@ -142,6 +147,12 @@ currencies:
       - "q"
     pay_enabled: true
     baltop_enabled: true
+    # Optional override for the top subcommand on this currency:
+    # top_subcommand:
+    #   name: "top"
+    #   aliases:
+    #     - "baltop"
+    #   permission: "basiceconomy.command.baltop"
     min_value: 0.0
     start_value: 100.0
   gems:
@@ -229,6 +240,7 @@ messages:
     <gray>/money set <player> <amount> [currency] - Set balance</gray>
     <gray>/money remove <player> <amount> [currency] - Remove balance</gray>
     <gray>/money send <player> <amount> [currency] - Pay player</gray>
+    <gray>/money top [currency] [page] - Show balance top list</gray>
     <gray>/pay <player> <amount> [currency] - Pay player</gray>
     <gray>/baltop [currency] - Show balance top list</gray>
     <gray>/baltop hide <player> - Hide a player from baltop</gray>

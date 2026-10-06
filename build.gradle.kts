@@ -4,7 +4,7 @@ plugins {
 }
 
 group = "me.usainsrht.basiceconomy"
-version = "1.0-SNAPSHOT"
+version = "1.1"
 
 repositories {
     mavenLocal()

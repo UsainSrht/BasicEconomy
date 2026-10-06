@@ -278,6 +278,51 @@ public class ConfigManager {
         return config.getString("commands." + parent + ".subcommands." + subKey + ".permission", defaultPerm);
     }
 
+    public String getCurrencySubcommandName(Currency currency, String subKey) {
+        if (currency != null) {
+            String path = "currencies." + currency.name().toLowerCase() + "." + subKey + "_subcommand.name";
+            if (config.isSet(path)) {
+                return config.getString(path, subKey);
+            }
+        }
+        return getSubcommandName("money", subKey);
+    }
+
+    public List<String> getCurrencySubcommandAliases(Currency currency, String subKey) {
+        if (currency != null) {
+            String path = "currencies." + currency.name().toLowerCase() + "." + subKey + "_subcommand.aliases";
+            if (config.isSet(path)) {
+                return config.getStringList(path);
+            }
+        }
+        return getSubcommandAliases("money", subKey);
+    }
+
+    public List<String> getCurrencySubcommandNamesWithAliases(Currency currency, String subKey) {
+        String name = getCurrencySubcommandName(currency, subKey);
+        List<String> aliases = getCurrencySubcommandAliases(currency, subKey);
+        List<String> names = new ArrayList<>();
+        if (name != null && !name.isBlank()) {
+            names.add(name);
+        }
+        for (String alias : aliases) {
+            if (alias != null && !alias.isBlank() && !names.contains(alias)) {
+                names.add(alias);
+            }
+        }
+        return names;
+    }
+
+    public String getCurrencySubcommandPermission(Currency currency, String subKey, String defaultPerm) {
+        if (currency != null) {
+            String path = "currencies." + currency.name().toLowerCase() + "." + subKey + "_subcommand.permission";
+            if (config.isSet(path)) {
+                return config.getString(path, defaultPerm);
+            }
+        }
+        return getSubcommandPermission("money", subKey, defaultPerm);
+    }
+
     public String getOthersOfflinePermission() {
         return config.getString("commands.money.subcommands.others.offline.permission", "basiceconomy.command.money.others.offline");
     }

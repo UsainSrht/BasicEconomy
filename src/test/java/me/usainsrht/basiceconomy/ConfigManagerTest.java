@@ -78,4 +78,83 @@ class ConfigManagerTest {
         String plainDisplay = net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText().serialize(msgDisplay);
         assertEquals("Currency: Coins", plainDisplay);
     }
+
+    @Test
+    void testCurrencyTopSubcommandSharedDefault() {
+        String yaml = """
+                commands:
+                  money:
+                    name: "money"
+                    permission: "basiceconomy.command.money"
+                    subcommands:
+                      top:
+                        name: "top"
+                        aliases:
+                          - "baltop"
+                          - "leaderboard"
+                        permission: "basiceconomy.command.baltop"
+                currencies:
+                  coins:
+                    name: "coins"
+                    baltop_enabled: true
+                """;
+
+        YamlConfiguration config = YamlConfiguration.loadConfiguration(new StringReader(yaml));
+        ConfigManager manager = new ConfigManager(config);
+        Currency coins = manager.getCurrencies().get("coins");
+        assertNotNull(coins);
+
+        assertEquals("top", manager.getCurrencySubcommandName(coins, "top"));
+        assertEquals(List.of("baltop", "leaderboard"), manager.getCurrencySubcommandAliases(coins, "top"));
+        assertEquals(List.of("top", "baltop", "leaderboard"), manager.getCurrencySubcommandNamesWithAliases(coins, "top"));
+        assertEquals("basiceconomy.command.baltop", manager.getCurrencySubcommandPermission(coins, "top", "fallback.perm"));
+    }
+
+    @Test
+    void testCurrencyTopSubcommandPerCurrencyOverride() {
+        String yaml = """
+                commands:
+                  money:
+                    name: "money"
+                    permission: "basiceconomy.command.money"
+                    subcommands:
+                      top:
+                        name: "top"
+                        aliases:
+                          - "baltop"
+                        permission: "basiceconomy.command.baltop"
+                currencies:
+                  coins:
+                    name: "coins"
+                    baltop_enabled: true
+                  gems:
+                    name: "gems"
+                    baltop_enabled: true
+                    top_subcommand:
+                      name: "gemtop"
+                      aliases:
+                        - "topgems"
+                      permission: "basiceconomy.gems.top"
+                """;
+
+        YamlConfiguration config = YamlConfiguration.loadConfiguration(new StringReader(yaml));
+        ConfigManager manager = new ConfigManager(config);
+
+        Currency coins = manager.getCurrencies().get("coins");
+        Currency gems = manager.getCurrencies().get("gems");
+        assertNotNull(coins);
+        assertNotNull(gems);
+
+        // coins uses shared defaults
+        assertEquals("top", manager.getCurrencySubcommandName(coins, "top"));
+        assertEquals(List.of("baltop"), manager.getCurrencySubcommandAliases(coins, "top"));
+        assertEquals(List.of("top", "baltop"), manager.getCurrencySubcommandNamesWithAliases(coins, "top"));
+        assertEquals("basiceconomy.command.baltop", manager.getCurrencySubcommandPermission(coins, "top", "fallback.perm"));
+
+        // gems uses per-currency overrides
+        assertEquals("gemtop", manager.getCurrencySubcommandName(gems, "top"));
+        assertEquals(List.of("topgems"), manager.getCurrencySubcommandAliases(gems, "top"));
+        assertEquals(List.of("gemtop", "topgems"), manager.getCurrencySubcommandNamesWithAliases(gems, "top"));
+        assertEquals("basiceconomy.gems.top", manager.getCurrencySubcommandPermission(gems, "top", "fallback.perm"));
+    }
 }

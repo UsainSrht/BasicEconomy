@@ -103,6 +103,15 @@ public class BaltopCommand {
             return 0;
         }
 
+        return execute(sender, currency, page);
+    }
+
+    public int execute(CommandSender sender, Currency currency, int page) {
+        if (currency == null) {
+            sender.sendMessage(config.getMessage(sender, "currency_not_found", "currency", ""));
+            return 0;
+        }
+
         if (!currency.baltopEnabled()) {
             sender.sendMessage(config.getMessage(sender, "baltop_disabled", "currency", currency));
             return 0;

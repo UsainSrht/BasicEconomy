@@ -2,6 +2,7 @@ package me.usainsrht.basiceconomy.impl.command;
 
 import com.mojang.brigadier.Command;
 import com.mojang.brigadier.arguments.DoubleArgumentType;
+import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.builder.RequiredArgumentBuilder;
@@ -29,17 +30,26 @@ public class EconomyCommand {
     private final ConfigManager config;
     private final PlayerFormatter playerFormatter;
     private final PayCommand payCommand;
+    private final BaltopCommand baltopCommand;
 
     public EconomyCommand(BasicEconomyPlugin plugin, AccountManagerImpl accountManager, ConfigManager config, PlayerFormatter playerFormatter) {
-        this(plugin, accountManager, config, playerFormatter, new PayCommand(plugin, accountManager, config, playerFormatter));
+        this(plugin, accountManager, config, playerFormatter,
+                new PayCommand(plugin, accountManager, config, playerFormatter),
+                new BaltopCommand(plugin, accountManager, config, playerFormatter));
     }
 
     public EconomyCommand(BasicEconomyPlugin plugin, AccountManagerImpl accountManager, ConfigManager config, PlayerFormatter playerFormatter, PayCommand payCommand) {
+        this(plugin, accountManager, config, playerFormatter, payCommand,
+                new BaltopCommand(plugin, accountManager, config, playerFormatter));
+    }
+
+    public EconomyCommand(BasicEconomyPlugin plugin, AccountManagerImpl accountManager, ConfigManager config, PlayerFormatter playerFormatter, PayCommand payCommand, BaltopCommand baltopCommand) {
         this.plugin = plugin;
         this.accountManager = accountManager;
         this.config = config;
         this.playerFormatter = playerFormatter;
         this.payCommand = payCommand;
+        this.baltopCommand = baltopCommand;
     }
 
     public LiteralArgumentBuilder<CommandSourceStack> build(String name) {
@@ -56,12 +66,18 @@ public class EconomyCommand {
         // /money [currency]
         if (!singleCurrency) {
             for (String cur : config.getCurrencies().keySet()) {
-                cmd.then(CommandHelper.literal(cur)
-                        .executes(ctx -> executeSelf(ctx, accountManager.getCurrency(cur))));
+                Currency currency = accountManager.getCurrency(cur);
+                LiteralArgumentBuilder<CommandSourceStack> curLiteral = CommandHelper.literal(cur)
+                        .executes(ctx -> executeSelf(ctx, currency));
+                if (currency != null && currency.baltopEnabled()) {
+                    registerCurrencyTopSubcommand(curLiteral, currency);
+                }
+                cmd.then(curLiteral);
             }
         }
 
         // Subcommands
+        registerTopSubcommand(cmd);
         registerSendSubcommand(cmd);
         registerReloadSubcommand(cmd);
         registerHelpSubcommand(cmd);
@@ -71,6 +87,89 @@ public class EconomyCommand {
         registerOthersArgument(cmd);
 
         return cmd;
+    }
+
+    private void registerTopSubcommand(LiteralArgumentBuilder<CommandSourceStack> root) {
+        Currency defaultCurrency = accountManager.getDefaultCurrency();
+        if (defaultCurrency == null || !defaultCurrency.baltopEnabled()) {
+            return;
+        }
+
+        boolean singleCurrency = config.getCurrencies().size() <= 1;
+        String permission = config.getCurrencySubcommandPermission(
+                defaultCurrency, "top", config.getCommandPermission("baltop"));
+
+        for (String tName : config.getCurrencySubcommandNamesWithAliases(defaultCurrency, "top")) {
+            LiteralArgumentBuilder<CommandSourceStack> topNode = CommandHelper.literal(tName)
+                    .requires(src -> src.getSender().hasPermission(permission))
+                    .executes(ctx -> baltopCommand.execute(ctx.getSource().getSender(), defaultCurrency, 1));
+
+            RequiredArgumentBuilder<CommandSourceStack, Integer> pageNode =
+                    Commands.argument("page", IntegerArgumentType.integer(1))
+                            .executes(ctx -> baltopCommand.execute(
+                                    ctx.getSource().getSender(),
+                                    defaultCurrency,
+                                    IntegerArgumentType.getInteger(ctx, "page")));
+            topNode.then(pageNode);
+
+            if (!singleCurrency) {
+                RequiredArgumentBuilder<CommandSourceStack, String> curArgNode =
+                        Commands.argument("currency", StringArgumentType.word())
+                                .suggests((ctx, builder) -> CommandHelper.suggestCurrencies(config, builder))
+                                .executes(this::executeTopCurrency)
+                                .then(Commands.argument("cur_page", IntegerArgumentType.integer(1))
+                                        .executes(this::executeTopCurrencyWithPage));
+                topNode.then(curArgNode);
+            }
+
+            root.then(topNode);
+        }
+    }
+
+    private void registerCurrencyTopSubcommand(LiteralArgumentBuilder<CommandSourceStack> curLiteral, Currency currency) {
+        String permission = config.getCurrencySubcommandPermission(
+                currency, "top", config.getCommandPermission("baltop"));
+
+        for (String tName : config.getCurrencySubcommandNamesWithAliases(currency, "top")) {
+            LiteralArgumentBuilder<CommandSourceStack> topNode = CommandHelper.literal(tName)
+                    .requires(src -> src.getSender().hasPermission(permission))
+                    .executes(ctx -> baltopCommand.execute(ctx.getSource().getSender(), currency, 1))
+                    .then(Commands.argument("page", IntegerArgumentType.integer(1))
+                            .executes(ctx -> baltopCommand.execute(
+                                    ctx.getSource().getSender(),
+                                    currency,
+                                    IntegerArgumentType.getInteger(ctx, "page"))));
+            curLiteral.then(topNode);
+        }
+    }
+
+    private int executeTopCurrency(CommandContext<CommandSourceStack> ctx) {
+        String currName = StringArgumentType.getString(ctx, "currency");
+        Currency currency = accountManager.getCurrency(currName);
+        if (currency == null) {
+            ctx.getSource().getSender().sendMessage(config.getMessage(ctx.getSource().getSender(), "currency_not_found", "currency", currName));
+            return 0;
+        }
+        if (!currency.baltopEnabled()) {
+            ctx.getSource().getSender().sendMessage(config.getMessage(ctx.getSource().getSender(), "baltop_disabled", "currency", currency));
+            return 0;
+        }
+        return baltopCommand.execute(ctx.getSource().getSender(), currency, 1);
+    }
+
+    private int executeTopCurrencyWithPage(CommandContext<CommandSourceStack> ctx) {
+        String currName = StringArgumentType.getString(ctx, "currency");
+        int page = IntegerArgumentType.getInteger(ctx, "cur_page");
+        Currency currency = accountManager.getCurrency(currName);
+        if (currency == null) {
+            ctx.getSource().getSender().sendMessage(config.getMessage(ctx.getSource().getSender(), "currency_not_found", "currency", currName));
+            return 0;
+        }
+        if (!currency.baltopEnabled()) {
+            ctx.getSource().getSender().sendMessage(config.getMessage(ctx.getSource().getSender(), "baltop_disabled", "currency", currency));
+            return 0;
+        }
+        return baltopCommand.execute(ctx.getSource().getSender(), currency, page);
     }
 
     private void registerSendSubcommand(LiteralArgumentBuilder<CommandSourceStack> root) {
