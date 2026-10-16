@@ -193,5 +193,50 @@ class PaymentHistoryTest {
                 me.usainsrht.basiceconomy.impl.transaction.CsvLogWriter.CSV_HEADER
         );
     }
+
+    @Test
+    void testCustomTypeAndTimeAgo() {
+        String yaml = """
+                messages:
+                  prefix: ""
+                  history_types:
+                    pay: "Transfer"
+                    admin_add: "Grant"
+                  history_time:
+                    just_now: "right now"
+                    minutes_ago: "<minutes> mins ago"
+                    hours_ago: "<hours> hours ago"
+                    yesterday: "prior day"
+                    days_ago: "<days> days ago"
+                    date: "on <date>"
+                    date_format: "dd/MM/yyyy"
+                """;
+        YamlConfiguration config = YamlConfiguration.loadConfiguration(new StringReader(yaml));
+        ConfigManager cm = new ConfigManager(config);
+
+        // Test custom types
+        net.kyori.adventure.text.Component payComp = cm.getTransactionTypeDisplay(TransactionType.PAY);
+        assertEquals("Transfer", net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText().serialize(payComp));
+
+        net.kyori.adventure.text.Component addComp = cm.getTransactionTypeDisplay(TransactionType.ADMIN_ADD);
+        assertEquals("Grant", net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText().serialize(addComp));
+
+        // Test custom time ago
+        long now = System.currentTimeMillis();
+        net.kyori.adventure.text.Component justNow = cm.formatTimeAgo(now - 5_000);
+        assertEquals("right now", net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText().serialize(justNow));
+
+        net.kyori.adventure.text.Component minsAgo = cm.formatTimeAgo(now - (12 * 60_000));
+        assertEquals("12 mins ago", net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText().serialize(minsAgo));
+
+        net.kyori.adventure.text.Component hoursAgo = cm.formatTimeAgo(now - (5 * 3600_000));
+        assertEquals("5 hours ago", net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText().serialize(hoursAgo));
+
+        net.kyori.adventure.text.Component yesterday = cm.formatTimeAgo(now - (24 * 3600_000));
+        assertEquals("prior day", net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText().serialize(yesterday));
+
+        net.kyori.adventure.text.Component daysAgo = cm.formatTimeAgo(now - (3 * 24 * 3600_000));
+        assertEquals("3 days ago", net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText().serialize(daysAgo));
+    }
 }
 

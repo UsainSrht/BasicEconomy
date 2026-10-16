@@ -109,11 +109,90 @@ public class ConfigManager {
 
         ConfigurationSection messagesSection = config.getConfigurationSection("messages");
         if (messagesSection != null) {
-            for (String key : messagesSection.getKeys(false)) {
-                String raw = messagesSection.getString(key, "");
-                rawMessages.put(key, raw);
-                messages.put(key, parse(raw));
+            loadMessagesRecursively(messagesSection, "");
+        }
+
+        // Support history types configured under history.types
+        ConfigurationSection historyTypesSec = config.getConfigurationSection("history.types");
+        if (historyTypesSec != null) {
+            for (String key : historyTypesSec.getKeys(false)) {
+                String raw = historyTypesSec.getString(key, "");
+                rawMessages.put("history_type_" + key.toLowerCase(java.util.Locale.ROOT), raw);
+                rawMessages.put("history_types." + key.toLowerCase(java.util.Locale.ROOT), raw);
             }
+        }
+
+        // Support history time formats configured under history.time-ago or history.time-format
+        ConfigurationSection historyTimeSec = config.getConfigurationSection("history.time-ago");
+        if (historyTimeSec == null) {
+            historyTimeSec = config.getConfigurationSection("history.time-format");
+        }
+        if (historyTimeSec != null) {
+            for (String key : historyTimeSec.getKeys(false)) {
+                String raw = historyTimeSec.getString(key, "");
+                String normKey = key.replace('-', '_').toLowerCase(java.util.Locale.ROOT);
+                rawMessages.put("history_time_" + normKey, raw);
+                rawMessages.put("history_time." + normKey, raw);
+            }
+        }
+
+        // Default history type messages
+        for (me.usainsrht.basiceconomy.api.transaction.TransactionType type : me.usainsrht.basiceconomy.api.transaction.TransactionType.values()) {
+            String typeName = type.name().toLowerCase(java.util.Locale.ROOT);
+            String primaryKey = "history_type_" + typeName;
+            if (!rawMessages.containsKey(primaryKey)) {
+                String val = rawMessages.get("history_types_" + typeName);
+                if (val == null) val = rawMessages.get("history_types." + typeName);
+                if (val == null) {
+                    val = switch (type) {
+                        case PAY -> "<yellow>Payment</yellow>";
+                        case ADMIN_ADD -> "<green>Admin Grant</green>";
+                        case ADMIN_SET -> "<aqua>Admin Set</aqua>";
+                        case ADMIN_REMOVE -> "<red>Admin Deduction</red>";
+                        case SYSTEM -> "<gray>System</gray>";
+                    };
+                }
+                rawMessages.put(primaryKey, val);
+                messages.put(primaryKey, parse(val));
+            }
+        }
+
+        // Default time ago messages
+        ensureDefaultRawMessage("history_time_just_now", "just now");
+        ensureDefaultRawMessage("history_time_minutes_ago", "<minutes>m ago");
+        ensureDefaultRawMessage("history_time_hours_ago", "<hours>h ago");
+        ensureDefaultRawMessage("history_time_yesterday", "yesterday");
+        ensureDefaultRawMessage("history_time_days_ago", "<days>d ago");
+        ensureDefaultRawMessage("history_time_date", "<date>");
+        ensureDefaultRawMessage("history_time_date_format", "yyyy-MM-dd");
+    }
+
+    private void loadMessagesRecursively(ConfigurationSection sec, String prefix) {
+        for (String key : sec.getKeys(false)) {
+            String fullKey = prefix.isEmpty() ? key : prefix + "_" + key;
+            String dotKey = prefix.isEmpty() ? key : prefix + "." + key;
+            if (sec.isConfigurationSection(key)) {
+                ConfigurationSection child = sec.getConfigurationSection(key);
+                if (child != null) {
+                    loadMessagesRecursively(child, fullKey);
+                }
+            } else {
+                String raw = sec.getString(key, "");
+                rawMessages.put(fullKey, raw);
+                rawMessages.put(dotKey, raw);
+                messages.put(fullKey, parse(raw));
+                messages.put(dotKey, parse(raw));
+            }
+        }
+    }
+
+    private void ensureDefaultRawMessage(String key, String def) {
+        if (!rawMessages.containsKey(key)) {
+            String dotKey = key.replaceFirst("_", ".");
+            String alt = rawMessages.get(dotKey);
+            String val = alt != null ? alt : def;
+            rawMessages.put(key, val);
+            messages.put(key, parse(val));
         }
     }
 
@@ -151,7 +230,15 @@ public class ConfigManager {
         }
 
         String rawPrefix = rawMessages.getOrDefault("prefix", "");
-        boolean showPrefix = !key.equals("prefix") && !key.equals("money_help") && !key.equals("money_info");
+        boolean showPrefix = !key.equals("prefix")
+                && !key.equals("money_help")
+                && !key.equals("money_info")
+                && !key.startsWith("history_time")
+                && !key.startsWith("history_type")
+                && !key.startsWith("history_types")
+                && !key.equals("history_tooltip")
+                && !key.startsWith("history_stats_line")
+                && !key.equals("history_stats_footer");
 
         TagResolver.Builder builder = TagResolver.builder();
 
@@ -517,5 +604,52 @@ public class ConfigManager {
 
     public String getHistoryStatsPermission() {
         return config.getString("commands.money.subcommands.history.stats.permission", "basiceconomy.command.money.history.stats");
+    }
+
+    public Component getTransactionTypeDisplay(me.usainsrht.basiceconomy.api.transaction.TransactionType type) {
+        return getTransactionTypeDisplay(null, type);
+    }
+
+    public Component getTransactionTypeDisplay(Audience audience, me.usainsrht.basiceconomy.api.transaction.TransactionType type) {
+        if (type == null) return Component.text("Unknown");
+        String key = "history_type_" + type.name().toLowerCase(java.util.Locale.ROOT);
+        return getMessage(audience, key);
+    }
+
+    public Component formatTimeAgo(long timestamp) {
+        return formatTimeAgo(null, timestamp);
+    }
+
+    public Component formatTimeAgo(Audience audience, long timestamp) {
+        long diff = Math.max(0, System.currentTimeMillis() - timestamp);
+        long seconds = diff / 1000L;
+        if (seconds < 60) {
+            return getMessage(audience, "history_time_just_now");
+        }
+        long minutes = seconds / 60L;
+        if (minutes < 60) {
+            return getMessage(audience, "history_time_minutes_ago", "minutes", String.valueOf(minutes));
+        }
+        long hours = minutes / 60L;
+        if (hours < 24) {
+            return getMessage(audience, "history_time_hours_ago", "hours", String.valueOf(hours));
+        }
+        long days = hours / 24L;
+        if (days == 1) {
+            return getMessage(audience, "history_time_yesterday");
+        }
+        if (days < 7) {
+            return getMessage(audience, "history_time_days_ago", "days", String.valueOf(days));
+        }
+
+        String pattern = rawMessages.getOrDefault("history_time_date_format", "yyyy-MM-dd");
+        java.time.format.DateTimeFormatter formatter;
+        try {
+            formatter = java.time.format.DateTimeFormatter.ofPattern(pattern).withZone(java.time.ZoneOffset.UTC);
+        } catch (Exception e) {
+            formatter = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd").withZone(java.time.ZoneOffset.UTC);
+        }
+        String dateStr = formatter.format(java.time.Instant.ofEpochMilli(timestamp));
+        return getMessage(audience, "history_time_date", "date", dateStr);
     }
 }

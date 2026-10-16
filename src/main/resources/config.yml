@@ -296,6 +296,24 @@ messages:
   history_empty: "<gray>No payment history found.</gray>"
   history_disabled: "<red>Payment history is disabled.</red>"
 
+  # Customizable transaction type displays (used in <type>)
+  history_types:
+    pay: "<yellow>Payment</yellow>"
+    admin_add: "<green>Admin Grant</green>"
+    admin_set: "<aqua>Admin Set</aqua>"
+    admin_remove: "<red>Admin Deduction</red>"
+    system: "<gray>System</gray>"
+
+  # Customizable relative time formatting (used in <time_ago>)
+  history_time:
+    just_now: "just now"
+    minutes_ago: "<minutes>m ago"
+    hours_ago: "<hours>h ago"
+    yesterday: "yesterday"
+    days_ago: "<days>d ago"
+    date: "<date>"
+    date_format: "yyyy-MM-dd"
+
   history_stats_header: "<gold>─────── <yellow>Transaction Stats:</yellow> <player> (<timeframe>) ───────</gold>"
   history_stats_line_currency: "<gray>Currency:</gray> <currency_display>"
   history_stats_line_sent: "<gray>Total Sent:</gray> <red>-<amount></red> <dark_gray>(<count> transfers)</dark_gray>"

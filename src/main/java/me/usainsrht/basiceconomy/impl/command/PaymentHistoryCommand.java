@@ -289,63 +289,90 @@ public class PaymentHistoryCommand {
             int offset = (targetPage - 1) * pageSize;
 
             transactionManager.getTransactions(filter, offset, pageSize).thenAccept(records -> {
-                Bukkit.getGlobalRegionScheduler().run(plugin, task -> {
-                    // Header
-                    viewer.sendMessage(config.getMessage(viewer, "history_header",
-                            "page", String.valueOf(targetPage),
-                            "max_pages", String.valueOf(totalPages),
-                            "currency", currency != null ? currency : (currName != null ? currName : "all")));
+                // Collect async player formatting futures for unique UUIDs on this page
+                java.util.Map<java.util.UUID, CompletableFuture<Component>> displayFutures = new java.util.HashMap<>();
+                for (TransactionRecord record : records) {
+                    if (record.senderUuid() != null) {
+                        displayFutures.computeIfAbsent(record.senderUuid(),
+                                u -> playerFormatter.formatPlayerAsync(Bukkit.getOfflinePlayer(u)));
+                    }
+                    if (record.receiverUuid() != null) {
+                        displayFutures.computeIfAbsent(record.receiverUuid(),
+                                u -> playerFormatter.formatPlayerAsync(Bukkit.getOfflinePlayer(u)));
+                    }
+                }
 
-                    // Entries
-                    for (TransactionRecord record : records) {
-                        boolean isReceived = record.receiverUuid().equals(target.getUniqueId());
-                        String counterpartName = isReceived
-                                ? (record.senderName() != null ? record.senderName() : "System")
-                                : (record.receiverName() != null ? record.receiverName() : "Unknown");
-
-                        Currency recCurrency = accountManager.getCurrency(record.currency());
-                        String formattedAmount = recCurrency != null
-                                ? recCurrency.format(record.amount())
-                                : record.amount().toPlainString() + " " + record.currency();
-
-                        String timeAgo = formatTimeAgo(record.timestamp());
-                        String dateUtc = UTC_DATE_FORMAT.format(Instant.ofEpochMilli(record.timestamp()));
-
-                        String msgKey = isReceived ? "history_entry_received" : "history_entry_sent";
-                        Component entryLine = config.getMessage(viewer, msgKey,
-                                "amount", formattedAmount,
-                                "player", counterpartName,
-                                "time_ago", timeAgo,
-                                "currency", recCurrency != null ? recCurrency : record.currency());
-
-                        // Tooltip
-                        Component tooltip = config.getMessage(viewer, "history_tooltip",
-                                "id", String.valueOf(record.id()),
-                                "date", dateUtc,
-                                "type", record.type().name(),
-                                "amount", formattedAmount,
-                                "sender", record.senderName() != null ? record.senderName() : "System",
-                                "receiver", record.receiverName() != null ? record.receiverName() : "Unknown",
-                                "server", record.server() != null ? record.server() : "default",
-                                "currency", recCurrency != null ? recCurrency : record.currency());
-
-                        Component hoverableEntry = entryLine.hoverEvent(HoverEvent.showText(tooltip));
-                        viewer.sendMessage(hoverableEntry);
+                CompletableFuture.allOf(displayFutures.values().toArray(new CompletableFuture[0])).thenAccept(ignored -> {
+                    java.util.Map<java.util.UUID, Component> resolvedDisplays = new java.util.HashMap<>();
+                    for (java.util.Map.Entry<java.util.UUID, CompletableFuture<Component>> entry : displayFutures.entrySet()) {
+                        resolvedDisplays.put(entry.getKey(), entry.getValue().join());
                     }
 
-                    // Footer with clickable pagination
-                    String cmdBase = buildPaginationCommand(target, isSelf, direction, currName);
-                    int prevPage = Math.max(1, targetPage - 1);
-                    int nextPage = Math.min(totalPages, targetPage + 1);
+                    Bukkit.getGlobalRegionScheduler().run(plugin, task -> {
+                        // Header
+                        viewer.sendMessage(config.getMessage(viewer, "history_header",
+                                "page", String.valueOf(targetPage),
+                                "max_pages", String.valueOf(totalPages),
+                                "currency", currency != null ? currency : (currName != null ? currName : "all")));
 
-                    String prevCmd = cmdBase + " " + prevPage;
-                    String nextCmd = cmdBase + " " + nextPage;
+                        // Entries
+                        for (TransactionRecord record : records) {
+                            Component senderDisplay = record.senderUuid() != null
+                                    ? resolvedDisplays.getOrDefault(record.senderUuid(), Component.text(record.senderName() != null ? record.senderName() : "Unknown"))
+                                    : Component.text(record.senderName() != null ? record.senderName() : "System");
 
-                    viewer.sendMessage(config.getMessage(viewer, "history_footer",
-                            "prev_cmd", prevCmd,
-                            "next_cmd", nextCmd,
-                            "page", String.valueOf(targetPage),
-                            "max_pages", String.valueOf(totalPages)));
+                            Component receiverDisplay = resolvedDisplays.getOrDefault(record.receiverUuid(),
+                                    Component.text(record.receiverName() != null ? record.receiverName() : "Unknown"));
+
+                            boolean isReceived = record.receiverUuid().equals(target.getUniqueId());
+                            Component counterpartDisplay = isReceived ? senderDisplay : receiverDisplay;
+
+                            Currency recCurrency = accountManager.getCurrency(record.currency());
+                            String formattedAmount = recCurrency != null
+                                    ? recCurrency.format(record.amount())
+                                    : record.amount().toPlainString() + " " + record.currency();
+
+                            Component timeAgo = config.formatTimeAgo(viewer instanceof net.kyori.adventure.audience.Audience a ? a : null, record.timestamp());
+                            Component typeDisplay = config.getTransactionTypeDisplay(viewer instanceof net.kyori.adventure.audience.Audience a ? a : null, record.type());
+                            String dateUtc = UTC_DATE_FORMAT.format(Instant.ofEpochMilli(record.timestamp()));
+
+                            String msgKey = isReceived ? "history_entry_received" : "history_entry_sent";
+                            Component entryLine = config.getMessage(viewer, msgKey,
+                                    "amount", formattedAmount,
+                                    "player", counterpartDisplay,
+                                    "time_ago", timeAgo,
+                                    "type", typeDisplay,
+                                    "currency", recCurrency != null ? recCurrency : record.currency());
+
+                            // Tooltip
+                            Component tooltip = config.getMessage(viewer, "history_tooltip",
+                                    "id", String.valueOf(record.id()),
+                                    "date", dateUtc,
+                                    "type", typeDisplay,
+                                    "amount", formattedAmount,
+                                    "sender", senderDisplay,
+                                    "receiver", receiverDisplay,
+                                    "server", record.server() != null ? record.server() : "default",
+                                    "currency", recCurrency != null ? recCurrency : record.currency());
+
+                            Component hoverableEntry = entryLine.hoverEvent(HoverEvent.showText(tooltip));
+                            viewer.sendMessage(hoverableEntry);
+                        }
+
+                        // Footer with clickable pagination
+                        String cmdBase = buildPaginationCommand(target, isSelf, direction, currName);
+                        int prevPage = Math.max(1, targetPage - 1);
+                        int nextPage = Math.min(totalPages, targetPage + 1);
+
+                        String prevCmd = cmdBase + " " + prevPage;
+                        String nextCmd = cmdBase + " " + nextPage;
+
+                        viewer.sendMessage(config.getMessage(viewer, "history_footer",
+                                "prev_cmd", prevCmd,
+                                "next_cmd", nextCmd,
+                                "page", String.valueOf(targetPage),
+                                "max_pages", String.valueOf(totalPages)));
+                    });
                 });
             });
         });

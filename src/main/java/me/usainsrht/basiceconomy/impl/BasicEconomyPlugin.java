@@ -58,7 +58,7 @@ public class BasicEconomyPlugin extends JavaPlugin implements Listener {
         accountManager = new AccountManagerImpl(this, configManager, storage, playerFormatter);
         BasicEconomyAPI.setEconomyManager(accountManager);
 
-        transactionManager = new me.usainsrht.basiceconomy.impl.transaction.TransactionManager(this, configManager, storage);
+        transactionManager = new me.usainsrht.basiceconomy.impl.transaction.TransactionManager(this, configManager, storage, playerFormatter);
 
         // Register events
         getServer().getPluginManager().registerEvents(this, this);

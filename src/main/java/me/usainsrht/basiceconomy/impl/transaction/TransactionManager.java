@@ -8,6 +8,7 @@ import me.usainsrht.basiceconomy.api.transaction.TransactionStats;
 import me.usainsrht.basiceconomy.impl.BasicEconomyPlugin;
 import me.usainsrht.basiceconomy.impl.config.ConfigManager;
 import me.usainsrht.basiceconomy.impl.storage.Storage;
+import me.usainsrht.basiceconomy.impl.util.PlayerFormatter;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
@@ -26,10 +27,17 @@ public class TransactionManager {
     private final CsvLogWriter csvLogWriter;
     private ScheduledTask pruneTask;
 
+    private final PlayerFormatter playerFormatter;
+
     public TransactionManager(BasicEconomyPlugin plugin, ConfigManager config, Storage storage) {
+        this(plugin, config, storage, null);
+    }
+
+    public TransactionManager(BasicEconomyPlugin plugin, ConfigManager config, Storage storage, PlayerFormatter playerFormatter) {
         this.plugin = plugin;
         this.config = config;
         this.storage = storage;
+        this.playerFormatter = playerFormatter;
         this.csvLogWriter = new CsvLogWriter(plugin, config);
         startPruningTask();
     }
@@ -62,17 +70,28 @@ public class TransactionManager {
             String formattedAmount = currency != null ? currency.format(record.amount()) : record.amount().toPlainString();
             String permission = config.getHighValueAlertPermission();
 
-            Bukkit.getGlobalRegionScheduler().run(plugin, task -> {
-                for (Player player : Bukkit.getOnlinePlayers()) {
-                    if (player.hasPermission(permission)) {
-                        player.sendMessage(config.getMessage(player, "history_alert_high_value",
-                                "sender", record.senderName() != null ? record.senderName() : "System",
-                                "receiver", record.receiverName() != null ? record.receiverName() : "Unknown",
-                                "amount", formattedAmount,
-                                "currency", currency != null ? currency : record.currency(),
-                                "id", String.valueOf(record.id())));
+            CompletableFuture<Component> senderFuture = (playerFormatter != null && record.senderUuid() != null)
+                    ? playerFormatter.formatPlayerAsync(Bukkit.getOfflinePlayer(record.senderUuid()))
+                    : CompletableFuture.completedFuture(Component.text(record.senderName() != null ? record.senderName() : "System"));
+
+            CompletableFuture<Component> receiverFuture = (playerFormatter != null && record.receiverUuid() != null)
+                    ? playerFormatter.formatPlayerAsync(Bukkit.getOfflinePlayer(record.receiverUuid()))
+                    : CompletableFuture.completedFuture(Component.text(record.receiverName() != null ? record.receiverName() : "Unknown"));
+
+            senderFuture.thenCombine(receiverFuture, (senderDisplay, receiverDisplay) -> {
+                Bukkit.getGlobalRegionScheduler().run(plugin, task -> {
+                    for (Player player : Bukkit.getOnlinePlayers()) {
+                        if (player.hasPermission(permission)) {
+                            player.sendMessage(config.getMessage(player, "history_alert_high_value",
+                                    "sender", senderDisplay,
+                                    "receiver", receiverDisplay,
+                                    "amount", formattedAmount,
+                                    "currency", currency != null ? currency : record.currency(),
+                                    "id", String.valueOf(record.id())));
+                        }
                     }
-                }
+                });
+                return null;
             });
         }
     }

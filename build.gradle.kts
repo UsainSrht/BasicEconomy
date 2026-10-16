@@ -60,8 +60,17 @@ tasks {
         }
     }
 
+    jar {
+        archiveClassifier.set("original")
+    }
+
     shadowJar {
         relocate("org.bstats", "me.usainsrht.basiceconomy.lib.bstats")
+        archiveClassifier.set("")
+
+        providers.environmentVariable("PLUGINS_DIR").orNull?.let {
+            destinationDirectory.set(file(it))
+        }
     }
 
     build {
