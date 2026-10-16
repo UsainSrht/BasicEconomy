@@ -14,6 +14,8 @@ import me.usainsrht.basiceconomy.impl.BasicEconomyPlugin;
 import me.usainsrht.basiceconomy.impl.account.AccountManagerImpl;
 import me.usainsrht.basiceconomy.impl.config.ConfigManager;
 import me.usainsrht.basiceconomy.impl.util.PlayerFormatter;
+import me.usainsrht.basiceconomy.api.transaction.TransactionRecord;
+import me.usainsrht.basiceconomy.api.transaction.TransactionType;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
 import org.bukkit.command.CommandSender;
@@ -21,6 +23,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
 
 import java.math.BigDecimal;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 public class EconomyCommand {
@@ -31,25 +34,33 @@ public class EconomyCommand {
     private final PlayerFormatter playerFormatter;
     private final PayCommand payCommand;
     private final BaltopCommand baltopCommand;
+    private final PaymentHistoryCommand historyCommand;
 
     public EconomyCommand(BasicEconomyPlugin plugin, AccountManagerImpl accountManager, ConfigManager config, PlayerFormatter playerFormatter) {
         this(plugin, accountManager, config, playerFormatter,
                 new PayCommand(plugin, accountManager, config, playerFormatter),
-                new BaltopCommand(plugin, accountManager, config, playerFormatter));
+                new BaltopCommand(plugin, accountManager, config, playerFormatter),
+                null);
     }
 
     public EconomyCommand(BasicEconomyPlugin plugin, AccountManagerImpl accountManager, ConfigManager config, PlayerFormatter playerFormatter, PayCommand payCommand) {
         this(plugin, accountManager, config, playerFormatter, payCommand,
-                new BaltopCommand(plugin, accountManager, config, playerFormatter));
+                new BaltopCommand(plugin, accountManager, config, playerFormatter),
+                null);
     }
 
     public EconomyCommand(BasicEconomyPlugin plugin, AccountManagerImpl accountManager, ConfigManager config, PlayerFormatter playerFormatter, PayCommand payCommand, BaltopCommand baltopCommand) {
+        this(plugin, accountManager, config, playerFormatter, payCommand, baltopCommand, null);
+    }
+
+    public EconomyCommand(BasicEconomyPlugin plugin, AccountManagerImpl accountManager, ConfigManager config, PlayerFormatter playerFormatter, PayCommand payCommand, BaltopCommand baltopCommand, PaymentHistoryCommand historyCommand) {
         this.plugin = plugin;
         this.accountManager = accountManager;
         this.config = config;
         this.playerFormatter = playerFormatter;
         this.payCommand = payCommand;
         this.baltopCommand = baltopCommand;
+        this.historyCommand = historyCommand;
     }
 
     public LiteralArgumentBuilder<CommandSourceStack> build(String name) {
@@ -83,6 +94,7 @@ public class EconomyCommand {
         registerHelpSubcommand(cmd);
         registerInfoSubcommand(cmd);
         registerAdminSubcommands(cmd);
+        registerHistorySubcommand(cmd);
         registerSeeSubcommand(cmd);
         registerOthersArgument(cmd);
 
@@ -236,6 +248,14 @@ public class EconomyCommand {
         }
     }
 
+    private void registerHistorySubcommand(LiteralArgumentBuilder<CommandSourceStack> root) {
+        if (historyCommand != null && config.isHistoryEnabled()) {
+            for (String hName : config.getSubcommandNamesWithAliases("money", "history")) {
+                root.then(historyCommand.buildMoneyHistorySubcommand(hName, config.getMoneyHistoryPermission()));
+            }
+        }
+    }
+
     private void registerSeeSubcommand(LiteralArgumentBuilder<CommandSourceStack> root) {
         String seePermission = config.getSubcommandPermission("money", "see", config.getOthersOfflinePermission());
         boolean singleCurrency = config.getCurrencies().size() <= 1;
@@ -382,6 +402,28 @@ public class EconomyCommand {
                         }
 
                         future.thenAccept(success -> {
+                            if (success && plugin.getTransactionManager() != null) {
+                                TransactionType type = switch (action) {
+                                    case "add" -> TransactionType.ADMIN_ADD;
+                                    case "set" -> TransactionType.ADMIN_SET;
+                                    default -> TransactionType.ADMIN_REMOVE;
+                                };
+                                UUID senderUuid = sender instanceof Player p ? p.getUniqueId() : null;
+                                TransactionRecord record = new TransactionRecord(
+                                        0,
+                                        System.currentTimeMillis(),
+                                        senderUuid,
+                                        sender.getName(),
+                                        target.getUniqueId(),
+                                        target.getName() != null ? target.getName() : targetName,
+                                        currency.name(),
+                                        bdAmount,
+                                        type,
+                                        config.getServerId()
+                                );
+                                plugin.getTransactionManager().record(record);
+                            }
+
                             Bukkit.getGlobalRegionScheduler().run(plugin, task -> {
                                 if (success) {
                                     sender.sendMessage(config.getMessage(sender, msgKey,

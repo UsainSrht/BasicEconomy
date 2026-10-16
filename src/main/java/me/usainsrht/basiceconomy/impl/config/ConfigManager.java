@@ -442,4 +442,80 @@ public class ConfigManager {
         }
         return defaultSuffixes;
     }
+
+    public String getServerId() {
+        return config.getString("server-id", "default");
+    }
+
+    public boolean isHistoryEnabled() {
+        return config.getBoolean("history.enabled", true);
+    }
+
+    public int getHistoryPageSize() {
+        return config.getInt("history.page-size", 8);
+    }
+
+    public int getHistoryRetentionDays() {
+        return config.getInt("history.retention-days", 30);
+    }
+
+    public int getHistoryPruneInterval() {
+        return config.getInt("history.prune-interval", 43200);
+    }
+
+    public boolean isGlobalLoggingEnabled() {
+        return config.getBoolean("history.logging.global.enabled", true);
+    }
+
+    public String getGlobalLogPattern() {
+        return config.getString("history.logging.global.file-pattern", "logs/global/{date}.csv");
+    }
+
+    public String getGlobalLogDateFormat() {
+        return config.getString("history.logging.global.date-format", "yyyy-MM-dd");
+    }
+
+    public boolean isPlayerLoggingEnabled() {
+        return config.getBoolean("history.logging.players.enabled", true);
+    }
+
+    public String getPlayerLogPattern() {
+        return config.getString("history.logging.players.file-pattern", "logs/players/{player}.csv");
+    }
+
+    public String getPlayerLogDateFormat() {
+        return config.getString("history.logging.players.date-format", "yyyy-MM-dd");
+    }
+
+    public boolean isLogToConsole() {
+        return config.getBoolean("history.logging.log-to-console", false);
+    }
+
+    public boolean isHighValueAlertEnabled() {
+        return config.getBoolean("history.high-value-alert.enabled", false);
+    }
+
+    public BigDecimal getHighValueAlertThreshold() {
+        return BigDecimal.valueOf(config.getDouble("history.high-value-alert.threshold", 50000.0));
+    }
+
+    public String getHighValueAlertPermission() {
+        return config.getString("history.high-value-alert.permission", "basiceconomy.alert.highvalue");
+    }
+
+    public String getPayHistoryPermission() {
+        return config.getString("commands.pay.subcommands.history.permission", "basiceconomy.command.pay.history");
+    }
+
+    public String getMoneyHistoryPermission() {
+        return config.getString("commands.money.subcommands.history.permission", "basiceconomy.command.money.history");
+    }
+
+    public String getHistoryOthersPermission() {
+        return config.getString("commands.money.subcommands.history.others.permission", "basiceconomy.command.money.history.others");
+    }
+
+    public String getHistoryStatsPermission() {
+        return config.getString("commands.money.subcommands.history.stats.permission", "basiceconomy.command.money.history.stats");
+    }
 }

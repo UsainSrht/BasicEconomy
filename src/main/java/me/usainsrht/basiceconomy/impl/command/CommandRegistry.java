@@ -32,7 +32,9 @@ public class CommandRegistry {
         manager.registerEventHandler(LifecycleEvents.COMMANDS, event -> {
             Commands commands = event.registrar();
 
-            PayCommand payCmd = new PayCommand(plugin, accountManager, config, playerFormatter);
+            PaymentHistoryCommand historyCmd = new PaymentHistoryCommand(plugin, accountManager, config, playerFormatter, plugin.getTransactionManager());
+
+            PayCommand payCmd = new PayCommand(plugin, accountManager, config, playerFormatter, historyCmd);
             String payName = config.getCommandName("pay");
             List<String> payAliases = config.getCommandAliases("pay");
             commands.register(payCmd.build(payName).build(), "BasicEconomy pay command", payAliases);
@@ -42,7 +44,7 @@ public class CommandRegistry {
             List<String> baltopAliases = config.getCommandAliases("baltop");
             commands.register(baltopCmd.build(baltopName).build(), "BasicEconomy baltop command", baltopAliases);
 
-            EconomyCommand moneyCmd = new EconomyCommand(plugin, accountManager, config, playerFormatter, payCmd, baltopCmd);
+            EconomyCommand moneyCmd = new EconomyCommand(plugin, accountManager, config, playerFormatter, payCmd, baltopCmd, historyCmd);
             String moneyName = config.getCommandName("money");
             List<String> moneyAliases = config.getCommandAliases("money");
             commands.register(moneyCmd.build(moneyName).build(), "BasicEconomy main command", moneyAliases);

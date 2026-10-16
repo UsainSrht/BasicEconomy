@@ -35,6 +35,8 @@ dependencies {
 
     testImplementation("io.papermc.paper:paper-api:1.20.6-R0.1-SNAPSHOT")
     testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
+    testImplementation("com.h2database:h2:2.2.224")
+    testImplementation("com.zaxxer:HikariCP:5.1.0")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher:1.10.2")
 }
 

@@ -32,6 +32,7 @@ public class BasicEconomyPlugin extends JavaPlugin implements Listener {
     private AccountManagerImpl accountManager;
     private VaultEconomyImpl vaultEconomy;
     private MiniPlaceholdersExpansion miniPlaceholdersExpansion;
+    private me.usainsrht.basiceconomy.impl.transaction.TransactionManager transactionManager;
 
     @Override
     public void onEnable() {
@@ -56,6 +57,8 @@ public class BasicEconomyPlugin extends JavaPlugin implements Listener {
 
         accountManager = new AccountManagerImpl(this, configManager, storage, playerFormatter);
         BasicEconomyAPI.setEconomyManager(accountManager);
+
+        transactionManager = new me.usainsrht.basiceconomy.impl.transaction.TransactionManager(this, configManager, storage);
 
         // Register events
         getServer().getPluginManager().registerEvents(this, this);
@@ -122,6 +125,9 @@ public class BasicEconomyPlugin extends JavaPlugin implements Listener {
         if (miniPlaceholdersExpansion != null) {
             miniPlaceholdersExpansion.unregister();
         }
+        if (transactionManager != null) {
+            transactionManager.shutdown();
+        }
         if (accountManager != null) {
             accountManager.shutdownSync();
         }
@@ -166,8 +172,16 @@ public class BasicEconomyPlugin extends JavaPlugin implements Listener {
                 accountManager.repairOnStartup();
                 accountManager.refreshBaltopCache();
             }
+            if (transactionManager != null) {
+                transactionManager.setStorage(storage);
+                transactionManager.startPruningTask();
+            }
         } catch (Exception e) {
             e.printStackTrace();
         }
+    }
+
+    public me.usainsrht.basiceconomy.impl.transaction.TransactionManager getTransactionManager() {
+        return transactionManager;
     }
 }

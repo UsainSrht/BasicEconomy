@@ -12,6 +12,9 @@ import me.usainsrht.basiceconomy.api.Currency;
 import me.usainsrht.basiceconomy.impl.account.AccountManagerImpl;
 import me.usainsrht.basiceconomy.impl.config.ConfigManager;
 import me.usainsrht.basiceconomy.impl.util.PlayerFormatter;
+import me.usainsrht.basiceconomy.api.transaction.TransactionRecord;
+import me.usainsrht.basiceconomy.api.transaction.TransactionType;
+import me.usainsrht.basiceconomy.impl.BasicEconomyPlugin;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
 import org.bukkit.command.CommandSender;
@@ -27,12 +30,18 @@ public class PayCommand {
     private final AccountManagerImpl accountManager;
     private final ConfigManager config;
     private final PlayerFormatter playerFormatter;
+    private final PaymentHistoryCommand historyCommand;
 
     public PayCommand(JavaPlugin plugin, AccountManagerImpl accountManager, ConfigManager config, PlayerFormatter playerFormatter) {
+        this(plugin, accountManager, config, playerFormatter, null);
+    }
+
+    public PayCommand(JavaPlugin plugin, AccountManagerImpl accountManager, ConfigManager config, PlayerFormatter playerFormatter, PaymentHistoryCommand historyCommand) {
         this.plugin = plugin;
         this.accountManager = accountManager;
         this.config = config;
         this.playerFormatter = playerFormatter;
+        this.historyCommand = historyCommand;
     }
 
     public LiteralArgumentBuilder<CommandSourceStack> build(String name) {
@@ -59,6 +68,12 @@ public class PayCommand {
 
         targetNode.then(amountNode);
         cmd.then(targetNode);
+
+        if (historyCommand != null && config.isHistoryEnabled()) {
+            for (String hName : config.getSubcommandNamesWithAliases("pay", "history")) {
+                cmd.then(historyCommand.buildPayHistorySubcommand(hName, config.getPayHistoryPermission()));
+            }
+        }
 
         return cmd;
     }
@@ -125,6 +140,22 @@ public class PayCommand {
                     accountManager.getAccount(target.getUniqueId()).thenAccept(targetAcc -> {
                         targetAcc.addBalance(currency, bdAmount).thenAccept(added -> {
                             if (added) {
+                                if (plugin instanceof BasicEconomyPlugin bePlugin && bePlugin.getTransactionManager() != null) {
+                                    TransactionRecord record = new TransactionRecord(
+                                            0,
+                                            System.currentTimeMillis(),
+                                            sender.getUniqueId(),
+                                            sender.getName(),
+                                            target.getUniqueId(),
+                                            target.getName() != null ? target.getName() : targetName,
+                                            currency.name(),
+                                            bdAmount,
+                                            TransactionType.PAY,
+                                            config.getServerId()
+                                    );
+                                    bePlugin.getTransactionManager().record(record);
+                                }
+
                                 CompletableFuture<Component> targetDisplayFuture = playerFormatter.formatPlayerAsync(target);
                                 CompletableFuture<Component> senderDisplayFuture = playerFormatter.formatPlayerAsync(sender);
                                 targetDisplayFuture.thenCombine(senderDisplayFuture, (targetDisplay, senderDisplay) -> {

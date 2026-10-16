@@ -19,4 +19,16 @@ public interface Storage {
     CompletableFuture<Void> saveBalance(UUID uuid, Currency currency, BigDecimal amount);
     
     CompletableFuture<List<Map.Entry<UUID, BigDecimal>>> getTopBalances(Currency currency, int limit);
+
+    CompletableFuture<Void> recordTransaction(me.usainsrht.basiceconomy.api.transaction.TransactionRecord record);
+
+    CompletableFuture<List<me.usainsrht.basiceconomy.api.transaction.TransactionRecord>> getTransactions(
+            me.usainsrht.basiceconomy.api.transaction.TransactionFilter filter, int offset, int limit);
+
+    CompletableFuture<Integer> countTransactions(me.usainsrht.basiceconomy.api.transaction.TransactionFilter filter);
+
+    CompletableFuture<me.usainsrht.basiceconomy.api.transaction.TransactionStats> getTransactionStats(
+            UUID playerUuid, Currency currency, long sinceMillis);
+
+    CompletableFuture<Integer> purgeTransactions(long cutoffMillis);
 }

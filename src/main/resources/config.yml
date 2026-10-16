@@ -1,5 +1,9 @@
 # BasicEconomy Configuration
 
+# Root-Level Server Identifier
+# Used for multi-server networks, cross-server sync, and audit logging
+server-id: "survival-1"
+
 # Storage Settings
 # Supported types: H2, MYSQL, MARIADB, POSTGRESQL, MONGODB
 storage:
@@ -44,6 +48,48 @@ baltop:
 
 # Players hidden from /baltop and baltop placeholders (stored as UUIDs)
 baltop-hidden-players: []
+
+# Payment History & Audit Settings
+history:
+  # Enable transaction logging and payment history features
+  enabled: true
+  
+  # Number of transactions displayed per chat page
+  page-size: 8
+  
+  # Database retention period in days (0 to retain indefinitely)
+  retention-days: 30
+  
+  # How often (in seconds) the retention pruning task runs (default: 43200s = 12h)
+  prune-interval: 43200
+  
+  # Dual-Tier CSV File Logging System
+  logging:
+    # Global daily transaction logs
+    global:
+      enabled: true
+      # Path pattern relative to plugin data folder.
+      # Supported placeholders: {date}, {time}, {server}
+      file-pattern: "logs/global/{date}.csv"
+      # Date format pattern used for {date}
+      date-format: "yyyy-MM-dd"
+      
+    # Per-player transaction logs
+    players:
+      enabled: true
+      # Path pattern relative to plugin data folder.
+      # Supported placeholders: {player}, {uuid}, {date}, {time}, {server}
+      file-pattern: "logs/players/{player}.csv"
+      date-format: "yyyy-MM-dd"
+      
+    # Also log payment events to console
+    log-to-console: false
+
+  # Real-time alerts to staff when a transfer exceeds a threshold
+  high-value-alert:
+    enabled: true
+    threshold: 50000.0
+    permission: "basiceconomy.alert.highvalue"
 
 # Commands
 commands:
@@ -100,6 +146,16 @@ commands:
         aliases:
           - "baltop"
         permission: "basiceconomy.command.baltop"
+      history:
+        name: "history"
+        aliases:
+          - "logs"
+          - "transactions"
+        permission: "basiceconomy.command.money.history"
+        others:
+          permission: "basiceconomy.command.money.history.others"
+        stats:
+          permission: "basiceconomy.command.money.history.stats"
   pay:
     name: "pay"
     aliases: []
@@ -108,6 +164,12 @@ commands:
       offline:
         name: "offline"
         permission: "basiceconomy.command.pay.offline"
+      history:
+        name: "history"
+        aliases:
+          - "log"
+          - "transactions"
+        permission: "basiceconomy.command.pay.history"
   baltop:
     name: "baltop"
     aliases: []
@@ -226,6 +288,24 @@ messages:
   baltop_already_hidden: "<red><player> is already hidden from baltop.</red>"
   baltop_not_hidden: "<red><player> is not hidden from baltop.</red>"
   
+  history_header: "<gold>───────── <yellow>Payment History</yellow> (<white><page>/<max_pages></white>) ─────────</gold>"
+  history_entry_received: "<green>+<amount></green> <gray>from</gray> <player> <dark_gray>•</dark_gray> <gray><time_ago></gray>"
+  history_entry_sent: "<red>-<amount></red> <gray>to</gray> <player> <dark_gray>•</dark_gray> <gray><time_ago></gray>"
+  history_tooltip: "<gold>Transaction #<id></gold>\n<gray>Date (UTC):</gray> <white><date></white>\n<gray>Type:</gray> <yellow><type></yellow>\n<gray>Amount:</gray> <yellow><amount></yellow>\n<gray>Sender:</gray> <white><sender></white>\n<gray>Receiver:</gray> <white><receiver></white>\n<gray>Server:</gray> <white><server></white>"
+  history_footer: "<gold>───────────────────────────────────────────</gold>\n<gray>[<yellow><click:run_command:'<prev_cmd>'>« Previous</click></yellow>]</gray>  <gray>Page <page> of <max_pages></gray>  <gray>[<yellow><click:run_command:'<next_cmd>'>Next »</click></yellow>]</gray>"
+  history_empty: "<gray>No payment history found.</gray>"
+  history_disabled: "<red>Payment history is disabled.</red>"
+
+  history_stats_header: "<gold>─────── <yellow>Transaction Stats:</yellow> <player> (<timeframe>) ───────</gold>"
+  history_stats_line_currency: "<gray>Currency:</gray> <currency_display>"
+  history_stats_line_sent: "<gray>Total Sent:</gray> <red>-<amount></red> <dark_gray>(<count> transfers)</dark_gray>"
+  history_stats_line_received: "<gray>Total Received:</gray> <green>+<amount></green> <dark_gray>(<count> transfers)</dark_gray>"
+  history_stats_line_net: "<gray>Net Flow:</gray> <flow_color><flow_sign><amount></flow_color>"
+  history_stats_line_avg: "<gray>Average Transfer:</gray> <yellow><amount></yellow>"
+  history_stats_footer: "<gold>──────────────────────────────────────────────────────────</gold>"
+
+  history_alert_high_value: "<dark_red>[Alert]</dark_red> <red>High-value transfer:</red> <sender> <gray>sent</gray> <yellow><amount></yellow> <gray>to</gray> <receiver> <dark_gray>(Tx #<id>)</dark_gray>"
+
   reloaded: "<green>Plugin reloaded successfully.</green>"
   
   money_help: |
@@ -242,6 +322,9 @@ messages:
     <gray>/money send <player> <amount> [currency] - Pay player</gray>
     <gray>/money top [currency] [page] - Show balance top list</gray>
     <gray>/pay <player> <amount> [currency] - Pay player</gray>
+    <gray>/pay history [sent|received] [currency] [page] - View payment history</gray>
+    <gray>/money history <player> [sent|received] [currency] [page] - View player's history</gray>
+    <gray>/money history stats <player> [currency] [timeframe] - View payment statistics</gray>
     <gray>/baltop [currency] - Show balance top list</gray>
     <gray>/baltop hide <player> - Hide a player from baltop</gray>
     <gray>/baltop unhide <player> - Unhide a player from baltop</gray>
